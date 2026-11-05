@@ -22,4 +22,4 @@ Es un único archivo `index.html`: todo corre en el navegador, no envía datos a
 - Es un modelo simplificado con fines de entrenamiento. No reemplaza el plan de contingencia ni el permiso de vuelco de la planta.
 - Los límites de vuelco de referencia (Res. ADA 336/03, tabla ACUMAR) deben verificarse contra el permiso vigente de cada planta.
 - Los indicadores de riesgo del simulacro no son una determinación legal.
-- Esta versión publicada no tiene registro compartido de resultados: cada acta se copia desde la pantalla de evaluación.
+- El registro de simulacros de esta versión publicada se guarda solo en el navegador de cada persona (no se comparte). Para conservar un resultado, copiá el acta desde la pantalla de evaluación.

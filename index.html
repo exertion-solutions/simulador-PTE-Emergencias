@@ -360,7 +360,7 @@ details summary{cursor:pointer;font-size:13px;color:var(--accent);margin-top:8px
     </div>
     <div class="regwrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Escenario</th><th style="text-align:right">Puntaje</th><th>Calificación</th><th>Riesgo</th></tr></thead><tbody id="regBody"></tbody></table></div>
     <details><summary>Exportar CSV (Excel)</summary><textarea class="acta" id="csvTx" readonly></textarea><div class="dlg-act"><button class="btn" id="btnCsv">Copiar CSV</button></div></details>
-    <p class="src">El simulacro sorpresa elige una emergencia al azar, oculta su nombre y quita las pistas. Cada operador guarda su propio historial; los demás pueden verlo pero no modificarlo.</p>
+    <p class="src">El simulacro sorpresa elige una emergencia al azar, oculta su nombre y quita las pistas. En esta versión publicada el historial se guarda solo en este navegador.</p>
     <div class="dlg-act"><button class="btn" data-close="mReg">Cerrar</button></div>
   </div>
 </div>
@@ -819,7 +819,7 @@ async function saveRun(rec){
   try{
     const use=window.claude&&window.claude.use;
     const db=use&&await use('db'),user=use&&await use('user'),id=user&&await user.id();
-    if(!db||!id){say('Este simulacro no se guardó: esta versión publicada no tiene registro compartido. Copiá el acta de abajo para conservarlo.');return;}
+    if(!db||!id){try{const L=JSON.parse(localStorage.getItem('pte-runs')||'[]');L.push(rec);localStorage.setItem('pte-runs',JSON.stringify(L.slice(-100)));say('Guardado en este navegador. En esta versión el registro no se comparte con otros equipos.');}catch(e){say('No se pudo guardar en este navegador. Copiá el acta de abajo para conservarlo.');}return;}
     const ref=db.doc('simulacros/'+id),cur=await ref.get();
     const runs=cur.exists?[...(cur.data().runs||[])]:[];
     runs.push(rec);
@@ -832,7 +832,7 @@ async function loadReg(){
   const sum=$('#regSum'); sum.textContent='Cargando…';
   try{
     const use=window.claude&&window.claude.use,db=use&&await use('db');
-    if(!db){REG=[];renderReg();sum.textContent='El registro compartido no está disponible en esta versión publicada.';return;}
+    if(!db){try{REG=JSON.parse(localStorage.getItem('pte-runs')||'[]').map(r=>({...r,uid:'local'}));}catch(e){REG=[];}renderReg();sum.textContent+=' (solo en este navegador)';return;}
     const snap=await Promise.race([db.collection('simulacros').get(),new Promise((_,no)=>setTimeout(()=>no({code:'timeout'}),10000))]);
     REG=snap.docs.flatMap(d=>(d.data().runs||[]).map(r=>({...r,uid:d.id})));
     renderReg();
