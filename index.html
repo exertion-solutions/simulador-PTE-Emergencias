@@ -1,0 +1,1302 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Simulador de planta de tratamiento de efluentes de bebidas: escenarios de operación y simulacros de emergencia ambiental con plan de contingencia, impacto del evento y acta.">
+<title>Simulador PTE Emergencias</title>
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: HMI de alto rendimiento (estilo ISA-101). Sinóptico en grises neutros; el color se reserva para estado de equipos y alarmas. Columna lateral con faceplate y calidad de vuelco; abajo tendencia y lista de alarmas. */
+:root{
+  --bg:#c5cacf; --panel:#e3e6e9; --panel2:#d3d8dc; --ink:#1b2126; --muted:#56616b; --line:#8b959e;
+  --pipe:#76818b; --water:#a7bccc; --water2:#86a3b8; --sludge:#8f7b5d; --steel:#bcc3c9; --steel2:#a0a9b1;
+  --run:#2b8a4b; --stop:#a4acb3; --fault:#c62d27; --warn:#c98a12; --accent:#1d5d8a; --flowc:#2a6d9b; --chem:#6a589f; --air:#f1f4f6;
+  --font-ui:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14181b; --panel:#1f252a; --panel2:#283037; --ink:#e2e7eb; --muted:#97a2ac; --line:#4b5660;
+  --pipe:#6c7883; --water:#3b5a70; --water2:#4d7290; --sludge:#7c6b51; --steel:#3a444d; --steel2:#4b5761;
+  --run:#45b56a; --stop:#5b656e; --fault:#ff5b51; --warn:#f0b43c; --accent:#72b2e2; --flowc:#7fbde6; --chem:#a896de; --air:#2c343b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14181b; --panel:#1f252a; --panel2:#283037; --ink:#e2e7eb; --muted:#97a2ac; --line:#4b5660;
+  --pipe:#6c7883; --water:#3b5a70; --water2:#4d7290; --sludge:#7c6b51; --steel:#3a444d; --steel2:#4b5761;
+  --run:#45b56a; --stop:#5b656e; --fault:#ff5b51; --warn:#f0b43c; --accent:#72b2e2; --flowc:#7fbde6; --chem:#a896de; --air:#2c343b; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-ui);font-size:15px;line-height:1.35;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 24px}
+button{font:inherit;color:inherit}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+/* barra superior */
+.bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 12px}
+.brand{display:flex;gap:12px;align-items:center;min-width:0}
+.plc{font-family:var(--font-num);font-size:12px;font-weight:600;padding:4px 7px;border:1px solid var(--line);border-radius:3px;background:var(--panel2);letter-spacing:.04em}
+.brand h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.01em;text-wrap:balance}
+.brand p{margin:0;color:var(--muted);font-size:13px}
+.status{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.clock{display:flex;flex-direction:column;align-items:flex-end;line-height:1;padding-right:4px}
+.clock span{font-family:var(--font-num);font-size:20px;font-weight:600}
+.clock small{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{border:0;background:var(--panel2);padding:6px 9px;font-family:var(--font-num);font-size:12px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.btn{border:1px solid var(--line);background:var(--panel2);padding:6px 12px;border-radius:4px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+.btn.danger{background:var(--fault);border-color:var(--fault);color:#fff}
+.btn:focus-visible,.seg button:focus-visible,.eqg:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.alm b{display:inline-block;min-width:20px;text-align:center;font-family:var(--font-num);margin-left:4px;padding:0 4px;border-radius:3px;background:var(--stop);color:var(--panel)}
+.btn.alm.active b{background:var(--fault);color:#fff}
+.btn.alm.unack{animation:blink 1s steps(2,start) infinite}
+@keyframes blink{50%{border-color:var(--fault);box-shadow:0 0 0 2px var(--fault)}}
+.scenbar{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:var(--ink);color:var(--panel);border-radius:6px;padding:8px 12px}
+.scenbar .tag{font-family:var(--font-num);font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
+.scenbar b{font-size:16px}
+.scenbar .sp{flex:1}
+.scenbar .btn{background:transparent;color:var(--panel);border-color:var(--panel)}
+.scenbar .btn.primary{background:var(--panel);color:var(--ink)}
+/* grilla */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-areas:"syn side" "trend alarms" "plan impact";gap:12px;margin-top:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px;min-width:0}
+.card h2{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.syn{grid-area:syn;padding:6px;align-self:start}
+.synwrap{overflow-x:auto}
+#syn{display:block;width:100%;min-width:860px;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);margin:6px 6px 2px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px;border:1px solid var(--line)}
+.side{grid-area:side;display:flex;flex-direction:column;gap:12px;min-width:0}
+.trend{grid-area:trend}
+.alarms{grid-area:alarms}
+@media (max-width:980px){.grid{grid-template-columns:minmax(0,1fr);grid-template-areas:"syn" "side" "trend" "alarms" "plan" "impact"}}
+/* SVG */
+#syn text{fill:var(--ink);font-family:var(--font-ui)}
+#syn .lbl{font-size:12px;font-weight:600}
+#syn .sub{font-size:10.5px;fill:var(--muted)}
+#syn .tiny{font-size:9.5px;fill:var(--muted);font-family:var(--font-num)}
+#syn .tank{fill:var(--steel);stroke:var(--steel2);stroke-width:1.5}
+#syn .liq{fill:var(--water)}
+#syn .sludgef{fill:var(--sludge)}
+#syn .pipe{fill:none;stroke:var(--pipe);stroke-width:4;stroke-linejoin:round}
+#syn .pipe.chem{stroke-width:2;stroke:var(--chem);opacity:.55}
+#syn .pipe.air{stroke-width:3;stroke:var(--steel2)}
+#syn .pipe.sl{stroke:var(--sludge);opacity:.75}
+#syn .flow{fill:none;stroke:var(--flowc);stroke-width:2;stroke-dasharray:6 10;opacity:0;stroke-linejoin:round}
+#syn .flow.chem{stroke:var(--chem);stroke-width:1.5;stroke-dasharray:3 6}
+#syn .flow.air{stroke:var(--air);stroke-width:1.5}
+#syn .flow.sl{stroke:var(--sludge);stroke-width:2}
+#syn .flow.on{opacity:1;animation:flow 1.2s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-16}}
+#syn .vbox rect{fill:var(--panel);stroke:var(--line);stroke-width:1}
+#syn .vbox .vl{font-size:10px;fill:var(--muted);font-family:var(--font-ui);font-weight:600;letter-spacing:.03em}
+#syn .vbox .vv{font-size:12px;font-family:var(--font-num);font-weight:600}
+#syn .vbox.alm rect{fill:var(--fault);stroke:var(--fault)}
+#syn .vbox.alm text{fill:#fff}
+#syn .vbox.wrn rect{fill:var(--warn);stroke:var(--warn)}
+#syn .vbox.wrn text{fill:#1b1b1b}
+#syn .eqg{cursor:pointer}
+#syn .eqg .ring{fill:none;stroke:none}
+#syn .eqg:hover .ring{stroke:var(--line);stroke-dasharray:3 3}
+#syn .eqg.sel .ring{stroke:var(--accent);stroke-width:2;stroke-dasharray:none}
+#syn .pm{stroke:var(--ink);stroke-width:1.2}
+#syn .st-run .pm{fill:var(--run)}
+#syn .st-stop .pm{fill:var(--stop)}
+#syn .st-fault .pm{fill:var(--fault);animation:fblink 1s steps(2,start) infinite}
+@keyframes fblink{50%{fill:var(--panel)}}
+#syn .pm-ico{fill:var(--panel);stroke:none}
+#syn .st-stop .pm-ico{fill:var(--ink);opacity:.55}
+#syn .spt{font-family:var(--font-num);font-size:10px;font-weight:600;fill:var(--ink)}
+#syn .blade{stroke:var(--ink);stroke-width:2;transform-box:fill-box;transform-origin:center}
+#syn .spin .blade{animation:spin 1.2s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#syn .bub{fill:var(--air);opacity:0}
+#syn .aer .bub{animation:bub 2.4s linear infinite}
+@keyframes bub{0%{opacity:0;transform:translateY(0)}20%{opacity:.9}100%{opacity:0;transform:translateY(-95px)}}
+#syn .over{fill:var(--fault);font-weight:700;font-size:13px}
+#syn .badge rect{fill:var(--ink)}
+#syn .badge text{fill:var(--panel);font-family:var(--font-num);font-size:9px;font-weight:600}
+@media (prefers-reduced-motion:reduce){#syn .flow.on,#syn .spin .blade,#syn .aer .bub,.btn.alm.unack,#syn .st-fault .pm{animation:none}#syn .aer .bub{opacity:.6}}
+/* faceplate */
+.fp-head{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.fp-head select{font:inherit;font-weight:600;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:4px 6px;color:var(--ink);max-width:100%;min-width:0;flex:1}
+.fp-title{margin:10px 0 2px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.fp-title .tg{font-family:var(--font-num);font-weight:600;font-size:13px;padding:1px 6px;border:1px solid var(--line);border-radius:3px}
+.fp-title b{font-size:17px}
+.fp-desc{margin:0 0 10px;color:var(--muted);font-size:13px}
+.state{display:inline-flex;gap:6px;align-items:center;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.05em}
+.state i{width:11px;height:11px;border-radius:50%;background:var(--stop);border:1px solid var(--ink)}
+.state.run i{background:var(--run)} .state.fault i{background:var(--fault)} .state.fault{color:var(--fault)}
+.fp-row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.fp-row .btn{flex:1;min-width:90px}
+.btn.on-act{background:var(--run);border-color:var(--run);color:#fff}
+.btn.off-act{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+.sp{margin:10px 0 4px}
+.sp label{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-weight:600}
+.sp label output{font-family:var(--font-num);color:var(--ink);font-size:15px}
+.sp input[type=range]{width:100%;accent-color:var(--accent)}
+.fp-pv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:10px}
+.fp-pv div{background:var(--panel2);border-radius:4px;padding:5px 8px}
+.fp-pv small{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.fp-pv span{font-family:var(--font-num);font-weight:600}
+.fp-note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+/* vuelco */
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:4px 4px;border-bottom:1px solid var(--line)}
+td{padding:5px 4px;border-bottom:1px solid var(--panel2)}
+td.n{font-family:var(--font-num);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.chip{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em}
+.chip.ok{background:var(--panel2);color:var(--muted)}
+.chip.bad{background:var(--fault);color:#fff}
+.chip.wn{background:var(--warn);color:#1b1b1b}
+details summary{cursor:pointer;font-size:13px;color:var(--accent);margin-top:8px}
+.limgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;margin-top:8px}
+.limgrid label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.limgrid input{font-family:var(--font-num);font-size:13px;padding:3px 6px;border:1px solid var(--line);border-radius:3px;background:var(--panel2);color:var(--ink);width:100%}
+.src{font-size:11.5px;color:var(--muted);margin:8px 0 0}
+/* tendencia */
+.trend-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.trend-h select{font:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:4px 6px;color:var(--ink)}
+#trend{width:100%;height:200px;display:block;margin-top:6px}
+/* alarmas */
+.alist{max-height:260px;overflow:auto}
+.alist tr.u td{font-weight:700}
+.alist td.pr{width:8px;padding:0}
+.alist td.pr i{display:block;width:6px;height:22px;border-radius:2px}
+.p1 i{background:var(--fault)} .p2 i{background:var(--warn)} .p3 i{background:var(--stop)}
+.empty{color:var(--muted);font-size:13px;padding:8px 2px}
+/* modales */
+.modal{position:fixed;inset:0;background:rgba(10,14,18,.6);display:flex;align-items:center;justify-content:center;z-index:50;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.dlg{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;width:min(720px,100%);max-height:100%;overflow:auto;padding:18px}
+.dlg h3{margin:0 0 6px;font-size:22px;text-wrap:balance}
+.dlg p{margin:6px 0}
+.scgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:14px 0 6px}
+.sc{border:1px solid var(--line);border-radius:6px;padding:12px;background:var(--panel2);cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:4px}
+.sc:hover,.sc:focus-visible{border-color:var(--accent);outline:none;box-shadow:0 0 0 2px var(--accent)}
+.sc b{font-size:16px}
+.sc small{color:var(--muted);font-size:12.5px}
+.sc .meta{font-family:var(--font-num);font-size:11px;color:var(--muted);text-transform:uppercase}
+.alarm-dlg{border:0;padding:0;overflow:hidden;width:min(520px,100%)}
+.alarm-top{background:var(--fault);color:#fff;padding:14px 18px;display:flex;gap:14px;align-items:center}
+.alarm-top svg{flex:none;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.08)}}
+@media (prefers-reduced-motion:reduce){.alarm-top svg{animation:none}}
+.alarm-top h3{color:#fff;margin:0;font-size:24px;letter-spacing:.04em}
+.alarm-top p{margin:2px 0 0;font-family:var(--font-num);font-size:13px;opacity:.9}
+.alarm-body{padding:16px 18px}
+.alarm-body .msg{font-size:17px;font-weight:600}
+.field{background:var(--panel2);border-left:3px solid var(--warn);padding:8px 10px;border-radius:3px;font-size:14px;margin-top:10px}
+.dlg-act{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+.score{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:8px 0 12px}
+.ring-score{width:120px;height:120px;flex:none}
+.grade{font-size:20px;font-weight:700}
+.bars{display:grid;gap:6px;flex:1;min-width:220px}
+.bars div{display:grid;grid-template-columns:150px minmax(0,1fr) 54px;gap:8px;align-items:center;font-size:13px}
+.bars .tr{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden}
+.bars .tr i{display:block;height:100%;background:var(--accent)}
+.bars .n{font-family:var(--font-num);text-align:right}
+.chk{list-style:none;padding:0;margin:6px 0}
+.chk li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:6px;padding:6px 0;border-bottom:1px solid var(--panel2);font-size:14px}
+.chk li .m{font-weight:700}
+.chk li.y .m{color:var(--run)} .chk li.n .m{color:var(--fault)} .chk li.p .m{color:var(--warn)}
+.chk li small{display:block;color:var(--muted);font-size:12.5px}
+.chk li .pts{font-family:var(--font-num);font-size:12.5px;color:var(--muted);white-space:nowrap}
+.dlg h4{margin:16px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.dlg ol{margin:4px 0;padding-left:20px}
+.dlg ol li{margin:3px 0}
+.log{font-family:var(--font-num);font-size:12px;max-height:160px;overflow:auto;background:var(--panel2);border-radius:4px;padding:6px 8px}
+.log div{padding:1px 0}
+.toast{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:5px;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
+/* emergencia */
+.plan{grid-area:plan}.impact{grid-area:impact}
+.plan h2{flex-wrap:wrap}
+.card h2 small{font-weight:500;letter-spacing:.03em;text-transform:none;font-size:12px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.pbtn{display:flex;flex-direction:column;gap:2px;text-align:left;padding:8px 10px;border:1px solid var(--line);border-left:4px solid var(--steel2);border-radius:4px;background:var(--panel2);cursor:pointer;min-width:0}
+.pbtn b{font-size:14px;font-weight:600}
+.pbtn small{color:var(--muted);font-size:12px;line-height:1.3}
+.pbtn .st{font-family:var(--font-num);font-size:11.5px;color:var(--muted);min-height:1.2em}
+.pbtn:hover:not(:disabled){border-color:var(--ink)}
+.pbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pbtn.done{border-left-color:var(--run)}
+.pbtn.done .st{color:var(--run);font-weight:600}
+.pbtn.on{border-left-color:var(--warn)}
+.pbtn.on .st{color:var(--ink);font-weight:600}
+.pbtn:disabled{cursor:default}
+.imp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.imp div{background:var(--panel2);border-radius:4px;padding:5px 8px}
+.imp small{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.imp span{font-family:var(--font-num);font-weight:600}
+.imp .bad span{color:var(--fault)}
+.sch{grid-column:1/-1;margin:6px 0 -2px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.sc.em{border-left:4px solid var(--fault)}
+.foot{margin:12px 0 0;font-size:12px;color:var(--muted)}
+.acta{width:100%;min-height:160px;font-family:var(--font-num);font-size:12px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:8px;margin-top:8px}
+/* registro e instructor */
+.opl{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.opl input{font:inherit;width:150px;padding:5px 7px;border:1px solid var(--line);border-radius:4px;background:var(--panel2);color:var(--ink)}
+.reg-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin:10px 0}
+.reg-bar label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.reg-bar select{font:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:4px 6px;color:var(--ink);max-width:200px}
+.regwrap{overflow-x:auto;max-height:320px;overflow-y:auto}
+</style>
+
+<header class="bar">
+  <div class="brand">
+    <span class="plc">PLC-01</span>
+    <div><h1>Simulador PTE Emergencias</h1><p>Planta de tratamiento de efluentes · gaseosas · operación y simulacros de emergencia ambiental</p></div>
+  </div>
+  <div class="status">
+    <label class="opl"><span>Operador</span><input id="opName" type="text" maxlength="40" autocomplete="off" placeholder="Nombre y apellido"></label>
+    <div class="clock"><span id="clk">08:00</span><small>Hora simulada</small></div>
+    <div class="seg" role="group" aria-label="Velocidad de simulación" id="speed">
+      <button data-s="1" aria-pressed="false">×1</button><button data-s="10" aria-pressed="false">×10</button><button data-s="30" aria-pressed="true">×30</button><button data-s="60" aria-pressed="false">×60</button>
+    </div>
+    <button class="btn" id="btnPause">Pausa</button>
+    <button class="btn alm" id="btnAlm">Alarmas<b id="almCount">0</b></button>
+    <button class="btn" id="btnReg">Registro</button>
+    <button class="btn primary" id="btnScen">Escenarios</button>
+  </div>
+</header>
+
+<div class="scenbar" id="scenBar" hidden>
+  <span class="tag">Escenario en curso</span>
+  <b id="scName">—</b>
+  <span class="num" id="scTime">t+00 min</span>
+  <span class="sp"></span>
+  <button class="btn" id="btnHint">Pedir pista (−5 pts)</button>
+  <button class="btn primary" id="btnEnd">Finalizar y evaluar</button>
+</div>
+
+<main class="grid">
+  <section class="card syn" aria-label="Sinóptico de la planta">
+    <div class="synwrap"><svg id="syn" viewBox="0 0 1200 640" role="img" aria-label="Sinóptico de la planta de tratamiento"></svg></div>
+    <div class="legend">
+      <span><i style="background:var(--run)"></i>En marcha</span>
+      <span><i style="background:var(--stop)"></i>Parado</span>
+      <span><i style="background:var(--fault)"></i>Falla</span>
+      <span>Tocá un equipo para operarlo</span>
+    </div>
+  </section>
+
+  <aside class="side">
+    <section class="card" id="fp" aria-live="polite"></section>
+    <section class="card">
+      <h2>Calidad de vuelco <span class="chip ok" id="vuelcoState">Cumple</span></h2>
+      <table>
+        <thead><tr><th>Parámetro</th><th style="text-align:right">Valor</th><th style="text-align:right">Límite</th><th></th></tr></thead>
+        <tbody id="vtab"></tbody>
+      </table>
+      <details>
+        <summary>Editar límites de vuelco</summary>
+        <div class="limgrid" id="limgrid"></div>
+      </details>
+      <p class="src">Destino: cuerpo de agua superficial. Valores de referencia según Res. ADA 336/03 (Pcia. de Buenos Aires); SST según tabla consolidada ACUMAR. Verificar el permiso de vuelco vigente de la planta y ajustar.</p>
+    </section>
+  </aside>
+
+  <section class="card trend">
+    <div class="trend-h">
+      <h2 style="margin:0;flex:1">Tendencia</h2>
+      <select id="trendSel" aria-label="Variable de tendencia"></select>
+    </div>
+    <canvas id="trend" aria-label="Gráfico de tendencia"></canvas>
+  </section>
+
+  <section class="card alarms">
+    <h2>Alarmas <button class="btn" id="btnAck" style="font-size:12px;padding:3px 8px">Reconocer todas</button></h2>
+    <div class="alist"><table><tbody id="atab"></tbody></table><div class="empty" id="aempty">Sin alarmas activas.</div></div>
+  </section>
+<section class="card plan" aria-label="Plan de contingencia">
+    <h2><span>Plan de contingencia</span><small>Acciones fuera del tablero. Cada una queda registrada con su hora.</small></h2>
+    <div class="pgrid" id="pgrid"></div>
+  </section>
+  <section class="card impact" aria-label="Impacto del evento">
+    <h2><span>Impacto del evento</span><span class="chip ok" id="riskChip">Riesgo bajo</span></h2>
+    <div class="imp" id="impGrid"></div>
+    <p class="src">Indicadores del simulacro para entrenamiento. No son una determinación legal: los plazos y obligaciones los fija el permiso de vuelco y el plan de contingencia de la planta.</p>
+  </section>
+</main>
+<p class="foot">Modelo simplificado con fines de entrenamiento. No reemplaza el plan de contingencia ni el permiso de vuelco de la planta.</p>
+
+<div class="modal" id="mScen" hidden>
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="mScenT">
+    <h3 id="mScenT">Escenarios de entrenamiento</h3>
+    <p>Cada escenario arranca con la planta en régimen normal. En algún momento aparece una alarma: diagnosticá con el panel, operá los equipos y, en las emergencias, activá el plan de contingencia. Al finalizar recibís un puntaje, el impacto del evento y un acta para el registro del simulacro.</p>
+    <div class="scgrid" id="scgrid"></div>
+    <div class="dlg-act"><button class="btn" data-close="mScen">Cerrar</button></div>
+  </div>
+</div>
+
+<div class="modal" id="mAlarm" hidden>
+  <div class="dlg alarm-dlg" role="alertdialog" aria-modal="true" aria-labelledby="mAlarmT">
+    <div class="alarm-top">
+      <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><path d="M28 4 L53 50 H3 Z" fill="#fff"/><path d="M28 6.5 L50.5 48 H5.5 Z" fill="#c62d27"/><rect x="25" y="18" width="6" height="18" rx="2" fill="#fff"/><circle cx="28" cy="42" r="3.4" fill="#fff"/></svg>
+      <div><h3 id="mAlarmT">ALARMA</h3><p id="mAlarmTag">—</p></div>
+    </div>
+    <div class="alarm-body">
+      <p class="msg" id="mAlarmMsg">—</p>
+      <div class="field" id="mAlarmField"></div>
+      <p style="color:var(--muted);font-size:13.5px;margin-top:10px">El tiempo de respuesta empieza a contar ahora. Revisá los valores del sinóptico y la tendencia antes de actuar.</p>
+      <div class="dlg-act"><button class="btn danger" id="btnAttend">Atender alarma</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="mReg" hidden>
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="mRegT">
+    <h3 id="mRegT">Registro de simulacros</h3>
+    <p class="src" id="regSum" style="margin:0">Cargando…</p>
+    <div class="reg-bar">
+      <label>Operador <select id="regSel" aria-label="Filtrar por operador"><option value="">Todos</option></select></label>
+      <button class="btn primary" id="btnBlind">Simulacro sorpresa</button>
+    </div>
+    <div class="regwrap"><table><thead><tr><th>Fecha</th><th>Operador</th><th>Escenario</th><th style="text-align:right">Puntaje</th><th>Calificación</th><th>Riesgo</th></tr></thead><tbody id="regBody"></tbody></table></div>
+    <details><summary>Exportar CSV (Excel)</summary><textarea class="acta" id="csvTx" readonly></textarea><div class="dlg-act"><button class="btn" id="btnCsv">Copiar CSV</button></div></details>
+    <p class="src">El simulacro sorpresa elige una emergencia al azar, oculta su nombre y quita las pistas. Cada operador guarda su propio historial; los demás pueden verlo pero no modificarlo.</p>
+    <div class="dlg-act"><button class="btn" data-close="mReg">Cerrar</button></div>
+  </div>
+</div>
+
+<div class="modal" id="mEnd" hidden>
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="mEndT" id="endBody"></div>
+</div>
+
+<div class="modal" id="mInfo" hidden>
+  <div class="dlg" role="dialog" aria-modal="true" id="infoBody"></div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lag=(x,tg,dt,tau)=>x+(tg-x)*(1-Math.exp(-dt/tau));
+const fmt=(v,d=1)=>(Number.isFinite(v)?v.toFixed(d):'—').replace('.',',');
+const hhmm=m=>{m=((m%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(Math.floor(m%60)).padStart(2,'0');};
+const rnd=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
+
+/* ---------- Equipos ---------- */
+const EQ={
+  B01:{tag:'B-01',name:'Bomba de elevación',desc:'Ecualización TK-101 → neutralización. Define el caudal tratado.',type:'pump',sp:true,unit:'m³/h',min:15,max:60,step:1},
+  B02:{tag:'B-02',name:'Bomba de presurización DAF',desc:'Recirculación presurizada con aire disuelto. Sin ella el flotador casi no separa sólidos.',type:'pump'},
+  B03:{tag:'B-03',name:'Bomba de alimentación al biológico',desc:'Clarificado DAF TK-104 → reactor R-201.',type:'pump'},
+  B04:{tag:'B-04',name:'Bomba de recirculación de lodos (RAS)',desc:'Sedimentador SD-301 → R-201. Más recirculación baja el manto de lodos.',type:'pump',sp:true,unit:'%',min:10,max:100,step:5},
+  B05:{tag:'B-05',name:'Bomba de purga de lodos (WAS)',desc:'Sedimentador → espesador. Controla los sólidos del licor mezcla (SSLM).',type:'pump',sp:true,unit:'%',min:0,max:100,step:5},
+  B06:{tag:'B-06',name:'Bomba de alimentación a centrífuga',desc:'Espesador TK-501 → centrífuga CF-501.',type:'pump'},
+  D1:{tag:'DP-01',name:'Dosificadora de ácido sulfúrico',desc:'Baja el pH en la neutralización TK-102.',type:'dose',unit:'%',min:0,max:100,step:1},
+  D2:{tag:'DP-02',name:'Dosificadora de soda cáustica',desc:'Sube el pH en la neutralización TK-102.',type:'dose',unit:'%',min:0,max:100,step:1},
+  D3:{tag:'DP-03',name:'Dosificadora de coagulante (PAC)',desc:'Coagulación en TK-103. Desestabiliza coloides y precipita fósforo.',type:'dose',unit:'%',min:0,max:100,step:1},
+  D4:{tag:'DP-04',name:'Dosificadora de polímero',desc:'Floculante en TK-103. Engorda el flóculo para el DAF.',type:'dose',unit:'%',min:0,max:100,step:1},
+  D5:{tag:'DP-05',name:'Dosificadora de nutrientes N-P',desc:'Urea y ácido fosfórico al R-201. El efluente de bebidas es pobre en nutrientes (relación DBO:N:P 100:5:1).',type:'dose',unit:'%',min:0,max:100,step:1},
+  D6:{tag:'DP-06',name:'Dosificadora de hipoclorito',desc:'Desinfección en la cámara de contacto TK-401.',type:'dose',unit:'%',min:0,max:100,step:1},
+  S1:{tag:'S-01',name:'Soplador 1',desc:'Aire a difusores de R-201 y R-202.',type:'blower',sp:true,unit:'%',min:30,max:100,step:5},
+  S2:{tag:'S-02',name:'Soplador 2',desc:'Aire a difusores de R-201 y R-202.',type:'blower',sp:true,unit:'%',min:30,max:100,step:5},
+  XV301:{tag:'XV-301',name:'Cloración del RAS',desc:'Inyecta hipoclorito en la línea de recirculación para controlar bacterias filamentosas. Uso prolongado daña la biomasa.',type:'valve'},
+  PLAN:{tag:'PLAN',name:'Plan de contingencia',desc:'',type:'plan'}
+};
+const ORDER=['B01','D1','D2','D3','D4','B02','B03','S1','S2','D5','B04','XV301','B05','D6','B06'];
+EQ.D1.sp=EQ.D2.sp=EQ.D3.sp=EQ.D4.sp=EQ.D5.sp=EQ.D6.sp=true;
+
+const NORMAL_EQ={B01:{on:true,sp:38},B02:{on:true},B03:{on:true},B04:{on:true,sp:50},B05:{on:true,sp:30},B06:{on:true},
+  D1:{on:true,sp:24},D2:{on:true,sp:0},D3:{on:true,sp:40,fault:false,reserve:false},D4:{on:true,sp:30},D5:{on:true,sp:45,tank:72},D6:{on:true,sp:20},
+  S1:{on:true,sp:65},S2:{on:true,sp:65},XV301:{on:false}};
+const NORMAL_P={L:50,pHeq:9,pHn:7.2,Peq:5,DQOeq:2600,DBOeq:1550,SSTeq:450,OD:2,H:1,SVI:105,M:3.43,blanket:.75,Lesp:40,pHout:7.3,
+  SSTd:55,SSTo:10,DQOo:180,DBOo:33,Po:.6,Clo:.15,To:27,Qin:40,DQOin:2600,Qout:40,Qover:0,Qv:40,pHin:9,Pin:5,Tin:30,effB:.97,nutDef:0};
+const LIM={pHmin:6.5,pHmax:10,T:45,DBO:50,DQO:250,SST:35,P:1,Cl:0.5};
+
+let S={t:8*60,speed:30,running:true,eq:JSON.parse(JSON.stringify(NORMAL_EQ)),p:{...NORMAL_P},ns:{q:0,ph:0,dqo:0,sst:0},hist:[],alarms:{},lastMin:0,imp:newImp(),plan:{},prodStop:false,prodAt:null,pw:{grid:true,gen:false,genAt:0},spill:null};
+let SC=null; // escenario activo
+let sel='B01';
+
+/* ---------- Afluente ---------- */
+function inflow(t,dt){
+  const n=S.ns;
+  n.q=lag(n.q,rnd()*2.5,dt,25); n.ph=lag(n.ph,rnd()*.25,dt,30); n.dqo=lag(n.dqo,rnd()*.06,dt,40); n.sst=lag(n.sst,rnd()*.08,dt,40);
+  const d=Math.sin(2*Math.PI*(t-6*60)/1440);
+  return {Q:Math.max(10,38+6*d+n.q),pH:9+n.ph,P:5,DQO:2600*(1+.08*d+n.dqo),DBO:1550*(1+.08*d+n.dqo),SST:450*(1+n.sst),T:30+2*d};
+}
+
+/* ---------- Modelo de proceso ---------- */
+function step(dt){
+  const e=S.eq,p=S.p;
+  const b=inflow(S.t,dt);
+  if(SC&&SC.def.mod) SC.def.mod(b,S.t-SC.t0,SC);
+  if(S.prodStop) b.Q*=.4;
+  p.Qin=b.Q; p.DQOin=b.DQO; p.pHin=b.pH; p.Pin=b.P; p.Tin=b.T;
+  let Qout=(e.B01.on&&e.B03.on)?e.B01.sp:0;
+  if(p.L<=3&&Qout>p.Qin) Qout=p.Qin;
+  p.L+=(p.Qin-Qout)*dt/60/400*100;
+  let Qover=0;
+  if(p.L>=100){Qover=Math.max(0,p.Qin-Qout);p.L=100;}
+  if(p.L<0)p.L=0;
+  p.Qout=Qout; p.Qover=Qover;
+  const tauEq=clamp(15*(p.L/50)*(40/Math.max(Qout,5)),4,120);
+  p.pHeq=lag(p.pHeq,b.pH,dt,tauEq); p.Peq=lag(p.Peq,b.P,dt,tauEq);
+  p.DQOeq=lag(p.DQOeq,b.DQO,dt,tauEq); p.DBOeq=lag(p.DBOeq,b.DBO,dt,tauEq); p.SSTeq=lag(p.SSTeq,b.SST,dt,tauEq);
+  const f=40/Math.max(Qout,10);
+  const acid=e.D1.on?e.D1.sp:0, soda=e.D2.on?e.D2.sp:0;
+  const coag=(e.D3.on&&(!e.D3.fault||e.D3.reserve))?e.D3.sp:0;
+  const poly=e.D4.on?e.D4.sp:0;
+  const nut=(e.D5.on&&e.D5.tank>0)?e.D5.sp:0;
+  p.coagAct=coag; p.nutAct=nut;
+  e.D5.tank=Math.max(0,e.D5.tank-nut*dt*0.0012);
+  if(Qout>0){
+    const pHt=clamp(p.pHeq-0.065*acid*f+0.06*soda*f-0.006*coag*f,1.5,13.5);
+    p.pHn=lag(p.pHn,pHt,dt,4);
+  }
+  // DAF
+  let effS=(e.B02.on?1:.35)*(.35+.5*(1-Math.exp(-coag*f/18))+.1*(1-Math.exp(-poly*f/15)));
+  if(p.pHn>9.5||p.pHn<5) effS*=.8;
+  effS=clamp(effS,0,.97);
+  const SSTd=p.SSTeq*(1-effS), rem=p.SSTeq-SSTd;
+  const DQOd=Math.max(50,p.DQOeq-rem*1.1), DBOd=Math.max(30,p.DBOeq-rem*.6);
+  const effP=.92*(1-Math.exp(-coag*f/30));
+  const Pd=p.Peq*(1-effP);
+  p.SSTd=lag(p.SSTd,SSTd,dt,3);
+  // Biológico
+  const loadN=(DBOd*Qout)/(1312*40);
+  const cap=((e.S1.on?e.S1.sp:0)+(e.S2.on?e.S2.sp:0))*.055;
+  p.OD=lag(p.OD,clamp(cap-4.6*loadN*p.H,0,7.5),dt,6);
+  const fOD=Math.min(1,(p.OD/(p.OD+.15))/(2/2.15));
+  const dpH=p.pHn<6.5?6.5-p.pHn:(p.pHn>8.5?p.pHn-8.5:0);
+  const fpH=Math.max(.2,1-.3*dpH);
+  const Pbio=Pd+nut*.22*f;
+  const Preq=Math.max(.5,.0085*DBOd*.98);
+  const nutDef=clamp((Preq-Pbio)/Preq,0,1);
+  const effB=clamp(.99*fOD*fpH*(1-.02*nutDef)*p.H,0,.99);
+  p.nutDef=nutDef; p.effB=effB;
+  const dmg=.012*Math.max(0,Math.abs(p.pHn-7.5)-2)+(e.XV301.on?.0009:0)+(p.OD<.5?.004:0);
+  p.H=clamp(p.H+(.0015*(1-p.H)-dmg)*dt,.05,1);
+  p.SVI=lag(p.SVI,105+400*nutDef+70*Math.max(0,1.2-p.OD),dt,180);
+  if(e.XV301.on) p.SVI-=1.6*dt;
+  p.SVI=Math.max(70,p.SVI);
+  const was=e.B05.on?e.B05.sp:0;
+  p.M=clamp(p.M+(.0011*loadN*effB-.0011*(was/30)*(p.M/3.5))*dt,.8,8);
+  const rasF=e.B04.on?e.B04.sp/50:.12;
+  const bEq=clamp(.8*(p.SVI/110)*(p.M/3.5)*((Qout/40)*.8+.2)/rasF,.2,4);
+  p.blanket=lag(p.blanket,bEq,dt,25);
+  let SSTo=10+Math.max(0,p.blanket-1.6)*30+Math.max(0,p.SVI-160)*.12+Math.max(0,SSTd-60)*.15;
+  const DBOs=DBOd*(1-effB);
+  let DBOo=DBOs+SSTo*.5, DQOo=DQOd*.055+DBOs*1.5+SSTo*1.3;
+  let Po=Math.max(.05,Pbio-Preq*(effB/.99))+SSTo*.02;
+  p.pHout=lag(p.pHout,7.4+(p.pHn-7.4)*.7,dt,10);
+  const clDose=e.D6.on?e.D6.sp*.025*f:0;
+  let Clo=Math.max(0,clDose-(.15+SSTo*.008+DQOo*.0005));
+  let pHo=p.pHout;
+  const Qv=Qout+Qover;
+  if(Qover>0&&Qv>0){const k=Qover/Qv;SSTo=SSTo*(1-k)+b.SST*k;DBOo=DBOo*(1-k)+b.DBO*k;DQOo=DQOo*(1-k)+b.DQO*k;Po=Po*(1-k)+b.P*k;pHo=pHo*(1-k)+b.pH*k;Clo*=(1-k);}
+  p.Qv=Qv;
+  p.SSTo=lag(p.SSTo,SSTo,dt,8); p.DBOo=lag(p.DBOo,DBOo,dt,8); p.DQOo=lag(p.DQOo,DQOo,dt,8); p.Po=lag(p.Po,Po,dt,8);
+  p.Clo=lag(p.Clo,Clo,dt,4); p.pHv=pHo; p.To=lag(p.To,b.T-3,dt,15);
+  // Espesador
+  const inS=was*.006+(e.B02.on&&Qout>0?.15:0);
+  const outS=e.B06.on?clamp(inS+(p.Lesp-40)*.03,0,.8):0;
+  p.Lesp=clamp(p.Lesp+(inS-outS)*dt,0,100);
+  S.t+=dt;
+}
+
+function limitsCheck(p){
+  if(p.Qv<=0) return {pH:true,T:true,DBO:true,DQO:true,SST:true,P:true,Cl:true,none:true};
+  return {pH:p.pHv>=LIM.pHmin&&p.pHv<=LIM.pHmax,T:p.To<=LIM.T,DBO:p.DBOo<=LIM.DBO,DQO:p.DQOo<=LIM.DQO,SST:p.SSTo<=LIM.SST,P:p.Po<=LIM.P,Cl:p.Clo<=LIM.Cl};
+}
+const allOk=c=>c.pH&&c.T&&c.DBO&&c.DQO&&c.SST&&c.P&&c.Cl;
+
+/* ---------- Alarmas ---------- */
+const ALM=[
+  {id:'XA_PWR',tag:'SUBEST.',txt:'Pérdida de energía de red: planta sin alimentación',pr:1,c:()=>!S.pw.grid},
+  {id:'XA_SPILL',tag:'TK-A01',txt:'Derrame de ácido sulfúrico en el área de dosificación',pr:1,c:()=>!!(S.spill&&S.spill.src)},
+  {id:'XA_ESC',tag:'DREN-01',txt:'Ácido sin contener avanzando hacia el drenaje',pr:1,c:()=>spEsc(S.spill)},
+  {id:'AH_DQO',tag:'AIT-100',txt:'Carga orgánica de ingreso muy alta (DQO > 6000 mg/l)',pr:1,c:p=>p.DQOin>6000},
+  {id:'LAHH101',tag:'LIT-101',txt:'Rebalse de ecualización: vuelco sin tratar',pr:1,c:p=>p.Qover>0},
+  {id:'AH102',tag:'AIT-102',txt:'pH neutralización alto (> 9,5)',pr:1,c:p=>p.pHn>9.5},
+  {id:'AL102',tag:'AIT-102',txt:'pH neutralización bajo (< 5,5)',pr:1,c:p=>p.pHn<5.5},
+  {id:'XA_D3',tag:'DP-03',txt:'Falla dosificadora de coagulante (disparo térmico)',pr:1,c:()=>S.eq.D3.fault&&!S.eq.D3.reserve},
+  {id:'LAL_D5',tag:'LIT-D5',txt:'Tanque de nutrientes vacío',pr:1,c:()=>S.eq.D5.tank<=.5},
+  {id:'XA_BIO',tag:'R-201',txt:'Actividad biológica comprometida (< 70 %)',pr:1,c:p=>p.H<.7},
+  {id:'AH101',tag:'AIT-100',txt:'pH de ingreso fuera de rango (< 5 o > 11)',pr:2,c:p=>p.pHin>11||p.pHin<5},
+  {id:'AH100',tag:'AIT-100',txt:'PO₄-P de ingreso alto (> 15 mg/l)',pr:2,c:p=>p.Pin>15},
+  {id:'LAH101',tag:'LIT-101',txt:'Nivel de ecualización alto (> 85 %)',pr:2,c:p=>p.L>85&&p.Qover<=0},
+  {id:'AH103',tag:'AIT-103',txt:'SST salida DAF alto (> 120 mg/l)',pr:2,c:p=>p.SSTd>120},
+  {id:'XS_B02',tag:'B-02',txt:'DAF sin presurización (B-02 detenida)',pr:2,c:()=>!S.eq.B02.on},
+  {id:'AL201',tag:'AIT-201',txt:'Oxígeno disuelto bajo (< 1,0 mg/l)',pr:2,c:p=>p.OD<1},
+  {id:'AH_IVL',tag:'LAB-301',txt:'IVL alto (> 200 ml/g): posible bulking',pr:2,c:p=>p.SVI>200},
+  {id:'LAH301',tag:'LIT-301',txt:'Manto de lodos alto (> 1,8 m)',pr:2,c:p=>p.blanket>1.8},
+  {id:'XS_B04',tag:'B-04',txt:'Recirculación de lodos detenida',pr:2,c:()=>!S.eq.B04.on},
+  {id:'V_pH',tag:'AIT-402',txt:'Vuelco: pH fuera de límite',pr:1,c:p=>!limitsCheck(p).pH},
+  {id:'V_DBO',tag:'AIT-402',txt:'Vuelco: DBO sobre límite',pr:1,c:p=>!limitsCheck(p).DBO},
+  {id:'V_DQO',tag:'AIT-402',txt:'Vuelco: DQO sobre límite',pr:1,c:p=>!limitsCheck(p).DQO},
+  {id:'V_SST',tag:'AIT-402',txt:'Vuelco: SST sobre límite',pr:1,c:p=>!limitsCheck(p).SST},
+  {id:'V_P',tag:'AIT-402',txt:'Vuelco: fósforo total sobre límite',pr:1,c:p=>!limitsCheck(p).P},
+  {id:'V_Cl',tag:'AIT-401',txt:'Vuelco: cloro libre sobre límite',pr:2,c:p=>!limitsCheck(p).Cl},
+  {id:'V_T',tag:'TIT-402',txt:'Vuelco: temperatura sobre límite',pr:2,c:p=>!limitsCheck(p).T},
+  {id:'LAW_D5',tag:'LIT-D5',txt:'Tanque de nutrientes bajo (< 10 %)',pr:3,c:()=>S.eq.D5.tank>.5&&S.eq.D5.tank<10},
+  {id:'LAH501',tag:'LIT-501',txt:'Nivel de espesador alto (> 85 %)',pr:3,c:p=>p.Lesp>85},
+  {id:'LAL101',tag:'LIT-101',txt:'Nivel de ecualización bajo (< 10 %)',pr:3,c:p=>p.L<10}
+];
+function evalAlarms(){
+  const p=S.p;
+  for(const a of ALM){
+    const on=a.c(p), st=S.alarms[a.id];
+    if(on&&!st){S.alarms[a.id]={t:S.t,ack:false,act:true}; if(SC&&!SC.popped&&SC.def.trig.includes(a.id)) showAlarmPopup(a);}
+    else if(on&&st) st.act=true;
+    else if(!on&&st){ if(st.ack) delete S.alarms[a.id]; else st.act=false; }
+  }
+}
+
+/* ---------- Registro de maniobras ---------- */
+function act(eq,a,v){
+  const e={t:S.t,eq,act:a,v};
+  if(SC){
+    e.rt=S.t-SC.t0; SC.log.push(e);
+    if(SC.popAt!=null&&SC.firstKey==null&&SC.def.key(e,SC)) SC.firstKey=S.t;
+    const w=SC.def.wrong&&SC.def.wrong(e,SC); if(w) SC.wrong.add(w);
+    const eqs=S.eq;
+    if(a==='off'&&(eq==='S1'||eq==='S2')&&!eqs.S1.on&&!eqs.S2.on) SC.wrong.add('Detuviste ambos sopladores: el biológico se queda sin oxígeno');
+    if(a==='off'&&eq==='B04') SC.wrong.add('Detuviste la recirculación de lodos: el manto sube y arrastra sólidos');
+    if(a==='off'&&eq==='B02') SC.wrong.add('Detuviste la presurización del DAF');
+  }
+}
+
+/* ---------- Escenarios ---------- */
+const evSpan=(sc,from,to)=>sc.hist.filter(h=>h.rt>=from&&h.rt<=to);
+const maxOf=(arr,k)=>arr.length?arr.reduce((m,h)=>Math.max(m,h.sp[k]),-1e9):0;
+const minOf=(arr,k)=>arr.length?arr.reduce((m,h)=>Math.min(m,h.sp[k]),1e9):100;
+const SCEN={
+  ph:{name:'pH fuera de control',lvl:'Media',dur:100,minEnd:60,blurb:'Descarga de un lavado de producción. El pH de ingreso se dispara.',
+    init(sc){sc.v=Math.random()<.5?'alto':'bajo';},
+    mod(b,rt,sc){if(rt>=2&&rt<50){const r=clamp((rt-2)/4,0,1)*clamp((50-rt)/4,0,1);b.pH+=((sc.v==='alto'?12.2:3.6)-b.pH)*r;}},
+    trig:['AH101','AH102','AL102'],
+    field:sc=>sc.v==='alto'?'Producción avisa por radio que terminó un lavado CIP de la línea de llenado.':'Producción avisa por radio que terminó un lavado ácido de los intercambiadores de calor.',
+    key:(a,sc)=>sc.v==='alto'?((a.eq==='D1'&&a.act==='sp'&&a.v>=40)||(a.eq==='B01'&&a.act==='sp'&&a.v<=32)):((a.eq==='D1'&&a.act==='sp'&&a.v<=10)||(a.eq==='D2'&&a.act==='sp'&&a.v>=20)||(a.eq==='B01'&&a.act==='sp'&&a.v<=32)),
+    wrong:(a,sc)=>{if(sc.v==='alto'&&a.eq==='D2'&&a.act==='sp'&&a.v>5)return 'Agregaste soda cáustica con el pH ya alcalino';if(sc.v==='bajo'&&a.eq==='D1'&&a.act==='sp'&&a.v>30)return 'Aumentaste el ácido con el pH ya ácido';},
+    checks(sc){const ev=evSpan(sc,2,58),last=sc.hist[sc.hist.length-1],okEnd=last.pHn>=6.5&&last.pHn<=8.5;
+      if(sc.v==='alto'){const mx=maxOf(ev,'D1');return [
+        {t:'Aumentaste la dosificación de ácido (DP-01)',d:'Pico de dosificación: '+Math.round(mx)+' %. Con pH 12 se necesita del orden de 70–80 %.',w:12,s:mx>=65?12:mx>=45?7:mx>30?3:0},
+        {t:'No dosificaste soda durante el evento alcalino',d:'Agregar soda empeora el desvío.',w:6,s:maxOf(ev,'D2')<=5?6:0},
+        {t:'Redujiste el caudal de B-01 para aprovechar la ecualización',d:'Menos caudal amortigua el pico y aumenta el tiempo de contacto con el ácido.',w:6,s:minOf(ev,'B01')<=32?6:0},
+        {t:'Volviste a dosis normales al terminar la descarga',d:'pH final de neutralización: '+fmt(last.pHn,1)+'. Dejar el ácido alto produce pH bajo después.',w:6,s:(okEnd&&mx>=45)?6:0}];}
+      const mx=maxOf(ev,'D2');return [
+        {t:'Cortaste el ácido (DP-01)',d:'Con efluente ácido la dosificación de ácido debe ir a 0.',w:6,s:minOf(ev,'D1')<=5?6:0},
+        {t:'Dosificaste soda cáustica (DP-02)',d:'Pico de dosificación: '+Math.round(mx)+' %. Con pH 3,6 se necesita del orden de 50–60 %.',w:12,s:mx>=45?12:mx>=30?7:mx>10?3:0},
+        {t:'Redujiste el caudal de B-01 para aprovechar la ecualización',d:'Menos caudal amortigua el pico.',w:6,s:minOf(ev,'B01')<=32?6:0},
+        {t:'Volviste a dosis normales al terminar la descarga',d:'pH final de neutralización: '+fmt(last.pHn,1)+'.',w:6,s:(okEnd&&mx>=30)?6:0}];},
+    hints:sc=>sc.v==='alto'?['Mirá AIT-100 y AIT-102: ¿el pH está alto o bajo? ¿Qué reactivo corrige ese sentido?','Subí DP-01 (ácido) por encima de 70 % y bajá B-01 a ~30 m³/h para que la ecualización amortigüe. Cuando el pH de ingreso vuelva a ~9, regresá DP-01 a ~24 %.']:['Mirá AIT-100 y AIT-102: ¿el pH está alto o bajo? ¿Qué reactivo corrige ese sentido?','Cortá DP-01, subí DP-02 (soda) a ~55 % y bajá B-01 a ~30 m³/h. Cuando el pH de ingreso vuelva a ~9, soda a 0 y ácido a ~24 %.'],
+    proc:sc=>sc.v==='alto'?['Confirmar el desvío en AIT-100 (ingreso) y AIT-102 (neutralización) y avisar a producción.','Aumentar la dosificación de ácido (DP-01) en proporción al desvío.','Reducir el caudal de B-01 para usar la capacidad de amortiguación de TK-101, vigilando que el nivel no supere 85 %.','Proteger el biológico: el pH en reactores debe mantenerse entre 6,5 y 8,5.','Al normalizarse el ingreso, volver gradualmente a las dosis y caudal de régimen.']:['Confirmar el desvío en AIT-100 y AIT-102 y avisar a producción.','Cortar el ácido y dosificar soda (DP-02) en proporción al desvío.','Reducir el caudal de B-01 para amortiguar en TK-101, vigilando el nivel.','Proteger el biológico: pH en reactores entre 6,5 y 8,5.','Al normalizarse el ingreso, volver a las dosis y caudal de régimen.']},
+  sst:{name:'Sólidos suspendidos altos',lvl:'Baja',dur:80,minEnd:30,blurb:'Algo falla en el tratamiento fisicoquímico y suben los sólidos.',
+    init(){},
+    mod(b,rt,sc){if(rt>=3&&!sc.faulted){sc.faulted=true;sc.faultAt=S.t;S.eq.D3.fault=true;}},
+    trig:['XA_D3','AH103'],
+    field:()=>'El recorredor informa que el flotador DAF se ve turbio y con flóculo muy fino.',
+    key:a=>a.eq==='D3'&&a.act==='reserva',
+    wrong:a=>{if(a.eq==='D3'&&a.act==='off')return 'Apagaste la dosificadora de coagulante en lugar de conmutar a la reserva';},
+    checks(sc){const r=sc.log.find(a=>a.eq==='D3'&&a.act==='reserva');const dtR=r?r.t-sc.faultAt:null;
+      const helped=sc.log.some(a=>(a.eq==='D4'&&a.act==='sp'&&a.v>=40)||(a.eq==='B01'&&a.act==='sp'&&a.v<=32));
+      return [
+        {t:'Conmutaste DP-03 a la bomba de reserva',d:r?'Conmutación a los '+Math.round(dtR)+' min de la falla.':'La dosificación de coagulante quedó fuera de servicio.',w:14,s:r?14:0},
+        {t:'Restableciste la coagulación en menos de 10 minutos',d:'Cada minuto sin coagulante pasa más sólidos al biológico.',w:8,s:dtR==null?0:dtR<=10?8:dtR<=25?Math.round(8*(25-dtR)/15):0},
+        {t:'Compensaste mientras tanto (más polímero o menos caudal)',d:'Medida de mitigación mientras se resuelve la falla.',w:4,s:helped?4:0},
+        {t:'Mantuviste la presurización del DAF (B-02)',d:'Sin B-02 el flotador no separa.',w:4,s:(r&&sc.hist.every(h=>h.sp.B02))?4:0}];},
+    hints:()=>['Revisá el estado de las dosificadoras en TK-103. ¿Alguna está en falla?','Abrí DP-03: el reset no alcanza con el térmico disparado. Pasá a la bomba de reserva.'],
+    proc:()=>['Identificar la falla de DP-03 en la lista de alarmas y en el sinóptico.','Intentar un reset; si el térmico sigue disparado, conmutar a la bomba de reserva.','Mientras se restablece: subir polímero o bajar caudal de B-01 para limitar el pase de sólidos.','Verificar que el SST de salida del DAF (AIT-103) vuelva a menos de 80 mg/l.','Generar el aviso a mantenimiento para revisar la bomba principal.']},
+  bulk:{name:'Bulking filamentoso',lvl:'Alta',dur:120,minEnd:60,blurb:'El lodo del sedimentador no decanta bien y el manto sube.',
+    init(){S.eq.D5.tank=0;S.p.SVI=235;S.p.blanket=1.6;S.eq.S2.sp=45;S.p.H=.95;},
+    trig:['AH_IVL','LAL_D5','LAH301'],
+    field:()=>'Laboratorio informa IVL de 235 ml/g y microscopía con abundantes filamentos.',
+    key:a=>(a.eq==='D5'&&a.act==='refill')||(a.eq==='B04'&&a.act==='sp'&&a.v>=70)||((a.eq==='S1'||a.eq==='S2')&&a.act==='sp'&&a.v>=60)||(a.eq==='XV301'&&a.act==='on'),
+    wrong:a=>{if(a.eq==='B04'&&a.act==='sp'&&a.v<40)return 'Redujiste la recirculación con el manto alto';if(a.eq==='B05'&&a.act==='sp'&&a.v>=70)return 'Purgaste lodo en exceso: se pierde biomasa';},
+    checks(sc){const re=sc.log.some(a=>a.eq==='D5'&&a.act==='refill');const xv=sc.hist.filter(h=>h.sp.XV301).length;
+      const od=sc.hist.filter(h=>h.OD>=1.5).length/Math.max(1,sc.hist.length);const ras=maxOf(sc.hist,'B04');
+      return [
+        {t:'Repusiste el tanque de nutrientes (DP-05)',d:'La deficiencia de N-P es la causa raíz: el efluente de bebidas no los aporta.',w:10,s:re?10:0},
+        {t:'Aumentaste la recirculación RAS (B-04 ≥ 75 %)',d:'Máximo aplicado: '+Math.round(ras)+' %. Baja el manto mientras se corrige la causa.',w:8,s:ras>=75?8:ras>=60?4:0},
+        {t:'Usaste la cloración del RAS de forma controlada',d:xv===0?'No se aplicó. Es una medida opcional que acelera la mejora del IVL.':'Tiempo aplicado: '+xv+' min'+(xv>45?'. Más de 45 min daña la biomasa.':'.'),w:6,s:xv===0?2:xv<=45?6:0},
+        {t:'Mantuviste el oxígeno disuelto ≥ 1,5 mg/l',d:'Tiempo con OD adecuado: '+Math.round(od*100)+' %. OD bajo favorece filamentosas.',w:6,s:Math.round(6*od)}];},
+    hints:()=>['Mirá las alarmas del tanque de nutrientes y el OD del reactor. ¿Qué favorece a las bacterias filamentosas?','Reponé DP-05, subí S-02 a ~65 %, B-04 a ~90 % y, si el manto sigue alto, abrí XV-301 por no más de 30–40 min.'],
+    proc:()=>['Confirmar con laboratorio (IVL y microscopía) y revisar alarmas asociadas.','Atacar la causa: reponer nutrientes (relación DBO:N:P 100:5:1) y asegurar OD ≥ 2 mg/l.','Controlar el síntoma: aumentar la recirculación RAS para bajar el manto de lodos.','Si el SST de vuelco está en riesgo, aplicar cloración del RAS por tiempo limitado.','Seguir el IVL en las horas siguientes y volver a la operación normal.']},
+  fos:{name:'Fósforo alto en el vuelco',lvl:'Media',dur:110,minEnd:75,blurb:'Cambia la carga de fósforo del efluente crudo.',
+    init(){},
+    mod(b,rt){if(rt>=5&&rt<60){const r=clamp((rt-5)/5,0,1)*clamp((60-rt)/5,0,1);b.P+=(42-b.P)*r;}},
+    trig:['AH100','V_P'],
+    field:()=>'Producción informa que está lavando tanques de jarabe con ácido fosfórico.',
+    key:a=>(a.eq==='D3'&&a.act==='sp'&&a.v>=55)||(a.eq==='D5'&&a.act==='sp'&&a.v<=30),
+    wrong:a=>{if(a.eq==='D5'&&a.act==='sp'&&a.v>55)return 'Aumentaste nutrientes con exceso de fósforo en el ingreso';},
+    checks(sc){const ev=evSpan(sc,5,75),last=sc.hist[sc.hist.length-1];const mx=maxOf(ev,'D3'),mn=minOf(ev,'D5');
+      return [
+        {t:'Aumentaste el coagulante para precipitar fósforo (DP-03)',d:'Pico de dosificación: '+Math.round(mx)+' %.',w:12,s:mx>=65?12:mx>=55?7:0},
+        {t:'Redujiste los nutrientes durante el evento (DP-05)',d:'El ácido fosfórico ya aporta el P que necesita el biológico. Mínimo aplicado: '+Math.round(mn)+' %.',w:8,s:mn<=25?8:mn<=35?4:0},
+        {t:'Volviste a dosis normales al terminar el evento',d:'Final: coagulante '+Math.round(last.sp.D3)+' %, nutrientes '+Math.round(last.sp.D5)+' %. Sin nutrientes aparece deficiencia y riesgo de bulking.',w:6,s:(mx<55&&mn>35)?0:(last.sp.D5>=35&&last.sp.D3<=55)?6:(last.sp.D5>=35||last.sp.D3<=55)?3:0},
+        {t:'Mantuviste el pH de neutralización ≥ 6,5',d:'El exceso de coagulante acidifica.',w:4,s:(mx>=55&&sc.hist.every(h=>h.pHn>=6.5))?4:0}];},
+    hints:()=>['Revisá AIT-100: ¿qué cambió en el ingreso? ¿Qué reactivo precipita fósforo?','Subí DP-03 a ~75 % y bajá DP-05 a ~10 %. Cuando el PO₄-P de ingreso vuelva a ~5 mg/l, esperá unos 20–30 min (la ecualización retrasa el cambio) y volvé a 40 % y 45 %.'],
+    proc:()=>['Detectar el aumento en el analizador de ingreso (AIT-100) antes de que llegue al vuelco.','Aumentar coagulante para precipitar fosfato en el DAF.','Reducir la dosificación de nutrientes mientras el ingreso aporta fósforo.','Controlar que el pH no caiga por el exceso de coagulante.','Al terminar el lavado, esperar que la ecualización se renueve (20–30 min) y recién entonces volver a las dosis de régimen, para no generar deficiencia de nutrientes.']},
+  spill:{em:true,name:'Derrame de ácido sulfúrico',lvl:'Alta',dur:100,minEnd:45,blurb:'Se rompe una conexión del tanque de H₂SO₄ y el ácido avanza hacia el drenaje.',
+    plan:['jefe','aislar','contener','muestra','autoridad','libro'],
+    init(sc){sc.k=0;},
+    mod(b,rt,sc){
+      if(rt>=3&&!S.spill) S.spill={src:true,contained:false,total:0,escaped:0,isoAt:0};
+      sc.k=clamp(sc.k+(spEsc(S.spill)?.15:-.2),0,1);
+      if(sc.k>0) b.pH+=(2.9-b.pH)*.93*sc.k;
+    },
+    trig:['XA_SPILL','XA_ESC'],
+    field:()=>'El operador de turno ve ácido en el piso del área de dosificación y un charco que avanza hacia la rejilla del drenaje pluvial.',
+    key:a=>a.eq==='PLAN'&&(a.act==='aislar'||a.act==='contener'),
+    wrong:a=>{if(a.eq==='D1'&&a.act==='sp'&&a.v>30)return 'Aumentaste el ácido con el pH ya ácido';},
+    checks(sc){const ev=evSpan(sc,3,95),au=pl(sc,'autoridad');return [
+      {t:'Aislaste la fuente (válvula del tanque de ácido)',d:fdl(sc,'aislar','Cada minuto de pérdida suma ácido derramado.'),w:8,s:tsc(dl(sc,'aislar'),5,20,8)},
+      {t:'Activaste la contención antes de que llegara al drenaje',d:fdl(sc,'contener','Si el ácido llega al drenaje pluvial sale del predio.'),w:8,s:tsc(dl(sc,'contener'),5,20,8)},
+      {t:'Avisaste al jefe de planta',d:fdl(sc,'jefe','La coordinación de la emergencia no queda solo en el operador.'),w:3,s:tsc(dl(sc,'jefe'),10,30,3)},
+      {t:'Notificaste a la autoridad ambiental',d:au?'Notificación registrada a las '+hhmm(au.t)+'. Verificá el plazo que fija tu plan de contingencia.':'No se notificó. El canal y el plazo los fija tu plan de contingencia.',w:3,s:au?3:0},
+      {t:'Corregiste el pH: cortaste el ácido y subiste la soda (DP-01 / DP-02)',d:'Mínimo de DP-01: '+Math.round(minOf(ev,'D1'))+' %. Pico de DP-02: '+Math.round(maxOf(ev,'D2'))+' %.',w:8,s:(minOf(ev,'D1')<=5?4:0)+(maxOf(ev,'D2')>=40?4:0)}];},
+    extra(){const sp=S.spill,o=[];
+      if(sp&&sp.escaped>0)o.push({t:'Parte del ácido llegó al drenaje: '+fmt(sp.escaped,1)+' m³',d:'Salió de la planta por el pluvial. Es lo que más pesa en una emergencia real.'});
+      if(sp&&sp.src)o.push({t:'El tanque seguía perdiendo al finalizar',d:'Derrame total: '+fmt(sp.total,1)+' m³.'});
+      return o;},
+    hints:()=>['Hay ácido en el piso. ¿Qué hacés primero: cortar la pérdida o corregir el pH? Mirá el panel Plan de contingencia.','Aislá la fuente y activá la contención de inmediato. Después avisá al jefe, cortá DP-01, subí DP-02 (soda) a ~55 % y notificá a la autoridad.'],
+    proc:()=>['Detener la fuente: cerrar la válvula del tanque de ácido.','Contener: barreras y absorbentes, cerrar el drenaje pluvial.','Avisar al jefe de planta y a seguridad e higiene.','Proteger el proceso: cortar DP-01 y neutralizar con soda (DP-02); vigilar el pH de ingreso y de neutralización.','Tomar muestra, notificar a la autoridad ambiental según el plan y registrar el evento.']},
+  pwr:{em:true,name:'Corte de energía eléctrica',lvl:'Alta',dur:110,minEnd:70,blurb:'Se cae la red: la planta se detiene y el biológico empieza a quedarse sin oxígeno.',
+    plan:['jefe','prod','gen','libro'],noStop:true,
+    okFn:h=>h.ok&&h.OD>=1,okLbl:'La planta mantuvo oxígeno y vuelco en regla',
+    init(sc){sc.blk=false;sc.back=false;},
+    mod(b,rt,sc){
+      if(rt>=3&&!sc.blk){sc.blk=true;S.pw.grid=false;for(const k of ORDER) S.eq[k].on=false;}
+      if(rt>=33&&!sc.back){sc.back=true;S.pw.grid=true;toast('Volvió la red eléctrica. Los equipos quedan detenidos: reiniciá en orden.');}
+    },
+    trig:['XA_PWR'],
+    field:()=>'La distribuidora informa un corte en la zona, sin hora estimada de reposición. El generador de emergencia está disponible pero no arranca solo.',
+    key:a=>(a.eq==='PLAN'&&a.act==='gen')||((a.eq==='S1'||a.eq==='S2')&&a.act==='on'),
+    wrong:()=>null,
+    checks(sc){const KEY=['B01','B02','B03','B04','B05','D1','D3','D4','D5','D6'],e=S.eq;
+      const on=KEY.filter(k=>e[k].on).length+((e.S1.on||e.S2.on)?1:0),tot=KEY.length+1;
+      const fS=sc.log.find(a=>(a.eq==='S1'||a.eq==='S2')&&a.act==='on'),fB=sc.log.find(a=>(a.eq==='B01'||a.eq==='B03')&&a.act==='on');
+      return [
+      {t:'Arrancaste el generador de emergencia',d:fdl(sc,'gen','Sin generador los sopladores no tienen energía hasta que vuelve la red.'),w:6,s:tsc(dl(sc,'gen'),6,20,6)},
+      {t:'Priorizaste los sopladores sobre las bombas de proceso',d:fS?'Sopladores en marcha a las '+hhmm(fS.t)+'.':'No se pusieron en marcha los sopladores.',w:6,s:fS?((!fB||fS.t<fB.t)?6:3):0},
+      {t:'Avisaste a Producción',d:fdl(sc,'prod','Reducir la descarga alarga el tiempo que aguanta la ecualización.'),w:4,s:tsc(dl(sc,'prod'),10,30,4)},
+      {t:'Avisaste al jefe de planta',d:fdl(sc,'jefe','La coordinación de la emergencia no queda solo en el operador.'),w:4,s:tsc(dl(sc,'jefe'),10,30,4)},
+      {t:'Restableciste el tratamiento',d:on+' de '+tot+' grupos de equipos en marcha al finalizar.',w:10,s:Math.round(10*on/tot)}];},
+    extra(sc){const lo=sc.hist.filter(h=>h.OD<1).length;
+      return lo?[{t:'Oxígeno disuelto bajo 1 mg/l durante '+lo+' min',d:'Sin aireación el biológico pierde actividad y el vuelco se degrada al reiniciar.'}]:[];},
+    hints:()=>['Mirá qué equipos quedaron en marcha. ¿Qué carga mantiene vivo al biológico mientras no hay red?','Arrancá el generador (Plan de contingencia) y esperá ~3 min. Poné en marcha S-01 y S-02 primero; cuando vuelva la red, reiniciá B-03, B-01, B-04, B-02 y las dosificadoras.'],
+    proc:()=>['Confirmar la pérdida de red y avisar al jefe de planta y a Producción.','Arrancar el generador y alimentar primero los sopladores: sin oxígeno el biológico se degrada en minutos.','Reducir la descarga de Producción para ganar tiempo en la ecualización.','Con la red de vuelta, reiniciar en orden: sopladores, recirculación (B-04), bombas B-03 y B-01, DAF (B-02) y dosificadoras.','Verificar pH, OD y nivel antes de volver a régimen y registrar el evento.']},
+  jar:{em:true,name:'Descarga masiva de jarabe',lvl:'Alta',dur:130,minEnd:70,blurb:'Producción envía por error un lote de jarabe al drenaje: la carga orgánica se multiplica.',
+    plan:['jefe','prod','camion','muestra','autoridad','libro'],
+    init(){},
+    mod(b,rt){let r=clamp((rt-3)/4,0,1)*clamp((75-rt)/20,0,1);
+      if(S.prodStop&&S.prodAt!=null) r*=clamp(1-(S.t-S.prodAt)/6,0,1);
+      b.DQO*=1+4.5*r;b.DBO*=1+4.5*r;b.SST*=1+.3*r;},
+    trig:['AH_DQO'],
+    field:()=>'Producción reconoce que se envió al drenaje un tanque de jarabe fuera de especificación por una válvula mal alineada.',
+    key:a=>(a.eq==='PLAN'&&(a.act==='prod'||a.act==='camion'))||(a.eq==='B01'&&a.act==='sp'&&a.v<=32)||((a.eq==='S1'||a.eq==='S2')&&a.act==='sp'&&a.v>=90),
+    wrong:a=>{if(a.eq==='B01'&&a.act==='sp'&&a.v>=50)return 'Subiste el caudal de B-01 con carga orgánica alta: arrastra más carga al biológico';if(a.eq==='B05'&&a.act==='sp'&&a.v>=70)return 'Purgaste lodo en exceso: se pierde biomasa';},
+    checks(sc){const ev=evSpan(sc,3,100),au=pl(sc,'autoridad'),mu=pl(sc,'muestra');
+      const air=sc.log.some(a=>(a.eq==='S1'||a.eq==='S2')&&a.act==='sp'&&a.v>=90)?5:sc.log.some(a=>(a.eq==='S1'||a.eq==='S2')&&a.act==='sp'&&a.v>=75)?3:0;
+      return [
+      {t:'Avisaste a Producción para cortar la descarga',d:fdl(sc,'prod','Es la única forma de cortar la fuente de la carga.'),w:8,s:tsc(dl(sc,'prod'),5,20,8)},
+      {t:'Redujiste el caudal de B-01 para retener carga en la ecualización',d:'Mínimo aplicado: '+Math.round(minOf(ev,'B01'))+' m³/h.',w:5,s:minOf(ev,'B01')<=32?5:0},
+      {t:'Reforzaste la aireación (S-01 / S-02 a 90 % o más)',d:'El biológico necesita oxígeno para degradar la carga extra.',w:5,s:air},
+      {t:'Pediste el camión atmosférico',d:fdl(sc,'camion','Retira carga concentrada de TK-101.'),w:4,s:tsc(dl(sc,'camion'),20,60,4)},
+      {t:'Avisaste al jefe de planta',d:fdl(sc,'jefe','La coordinación de la emergencia no queda solo en el operador.'),w:3,s:tsc(dl(sc,'jefe'),10,30,3)},
+      {t:'Notificaste a la autoridad ambiental',d:au?'Notificación registrada a las '+hhmm(au.t)+'. Verificá el plazo de tu plan.':'No se notificó. El canal y el plazo los fija tu plan de contingencia.',w:3,s:au?3:0},
+      {t:'Tomaste muestra del vuelco',d:mu?'Muestra a las '+hhmm(mu.t)+'.':'Sin muestra no hay evidencia del evento.',w:2,s:mu?2:0}];},
+    extra(sc){const mx=sc.hist.reduce((m,h)=>Math.max(m,h.DBOo),0);
+      return mx>LIM.DBO?[{t:'DBO₅ máxima en el vuelco: '+Math.round(mx)+' mg/l',d:'Límite '+fmt(LIM.DBO,0)+' mg/l. Una excedencia sostenida es la que genera sanciones y reclamos.'}]:[];},
+    hints:()=>['AIT-100 muestra una DQO muy alta en el ingreso. ¿Cómo evitás que llegue de golpe al biológico? ¿Quién puede cortar la fuente?','Avisá a Producción (Plan de contingencia), bajá B-01 a ~30 m³/h, subí S-01 y S-02 a 100 % y pedí un camión atmosférico para retirar carga de TK-101.'],
+    proc:()=>['Confirmar la carga en AIT-100 y avisar a Producción para cortar la descarga.','Retener: bajar B-01 y usar el volumen de TK-101 como amortiguador, vigilando el nivel.','Proteger el biológico: aireación al máximo y sin purgar lodo de más.','Retirar carga concentrada con camión atmosférico.','Tomar muestra, avisar al jefe, notificar a la autoridad según el plan y registrar el evento.']}
+};
+
+/* ---------- Capa de emergencia ---------- */
+const pl=(sc,k)=>sc.log.find(a=>a.eq==='PLAN'&&a.act===k);
+const dl=(sc,k)=>{const a=pl(sc,k);return a?a.t-(sc.popAt!=null?sc.popAt:sc.t0):null;};
+const tsc=(d,f,s,w)=>d==null?0:d<=f?w:d>=s?0:Math.round(w*(s-d)/(s-f));
+function fdl(sc,k,why){const d=dl(sc,k);return d==null?'No se ejecutó. '+why:'Ejecutada a los '+Math.max(0,Math.round(d))+' min de la alarma. '+why;}
+function newImp(){return {minOut:0,kgDBO:0,kgSST:0,m3over:0,prodMin:0,pwrMin:0};}
+function spEsc(sp){return !!sp&&!sp.contained&&(sp.src||S.t<sp.isoAt+12);}
+function powered(id){return S.pw.grid||(S.pw.gen&&S.t>=S.pw.genAt&&(id==='S1'||id==='S2'||id==='B04'));}
+const PLAN=[
+  {k:'jefe',l:'Avisar al jefe de planta',d:'Informa el evento y pide apoyo para coordinar.'},
+  {k:'prod',l:'Avisar a Producción',d:'Pide reducir o cortar la descarga al drenaje.'},
+  {k:'aislar',l:'Aislar la fuente',d:'Cierra la válvula del tanque de ácido y corta la pérdida.'},
+  {k:'contener',l:'Activar contención',d:'Barreras, absorbentes y cierre del drenaje pluvial.'},
+  {k:'gen',l:'Arrancar generador',d:'Alimenta sopladores y recirculación. Tarda unos 3 min.'},
+  {k:'camion',l:'Pedir camión atmosférico',d:'Retira efluente concentrado de la ecualización.'},
+  {k:'muestra',l:'Tomar muestra del vuelco',d:'Para laboratorio y evidencia del evento.'},
+  {k:'autoridad',l:'Notificar a la autoridad ambiental',d:'Canal y plazo según tu plan y el permiso de vuelco.'},
+  {k:'libro',l:'Registrar en el libro de planta',d:'Deja constancia de hora, causa y acciones.'}
+];
+function buildPlan(){
+  $('#pgrid').innerHTML=PLAN.map(d=>`<button type="button" class="pbtn" data-k="${d.k}"><b>${d.l}</b><small>${d.d}</small><span class="st"></span></button>`).join('');
+  $('#pgrid').querySelectorAll('.pbtn').forEach(b=>b.onclick=()=>planAct(b.dataset.k));
+}
+function updPlan(){
+  const g=$('#pgrid'); if(!g)return;
+  g.querySelectorAll('.pbtn').forEach(b=>{
+    const k=b.dataset.k,st=S.plan[k],d=PLAN.find(x=>x.k===k),lab=b.querySelector('b');
+    let cls='pbtn',txt='',dis=false;
+    if(k==='prod'){
+      if(st&&st.on){lab.textContent='Reanudar producción';cls+=' on';txt='Descarga reducida desde '+hhmm(st.t);}
+      else{lab.textContent=d.l;if(st){cls+=' done';txt='Producción reanudada';}}
+    } else if(st){cls+=' done';dis=true;txt='✓ '+hhmm(st.t)+(SC?' · t+'+Math.max(0,Math.round(st.t-SC.t0))+' min':'');}
+    b.className=cls; b.disabled=dis; b.querySelector('.st').textContent=txt;
+  });
+}
+function planAct(k){
+  const d=PLAN.find(x=>x.k===k),st=S.plan[k],t=S.t;
+  const ok=!SC||(SC.def.plan||['jefe','muestra','libro']).includes(k);
+  if(!ok){
+    if(st)return;
+    S.plan[k]={t}; act('PLAN',k);
+    SC.wrong.add('Activaste una acción que no corresponde a esta situación: '+d.l);
+    toast('Acción registrada: no corresponde a esta situación.'); updPlan(); return;
+  }
+  if(k==='prod'){
+    if(st&&st.on){S.prodStop=false;st.on=false;act('PLAN','prodoff');toast('Producción reanudada.');}
+    else{S.prodStop=true;S.prodAt=t;S.plan.prod={t,on:true};act('PLAN','prod');toast('Producción informada: la descarga se reduce.');}
+    updPlan(); return;
+  }
+  if(st)return;
+  S.plan[k]={t}; act('PLAN',k);
+  if(k==='aislar'){if(S.spill&&S.spill.src){S.spill.src=false;S.spill.isoAt=t;toast('Fuente aislada: el tanque ya no pierde.');}else toast('No hay una pérdida activa que aislar.');}
+  else if(k==='contener'){if(S.spill){S.spill.contained=true;toast('Contención activada: el drenaje queda protegido.');}else toast('Contención preparada. No hay derrame activo.');}
+  else if(k==='gen'){S.pw.gen=true;S.pw.genAt=t+3;toast('Generador arrancando (≈3 min).');}
+  else if(k==='camion'){S.p.L=Math.max(0,S.p.L-25);S.p.DQOeq*=.6;S.p.DBOeq*=.6;toast('Camión retirando efluente de TK-101.');}
+  else toast({jefe:'Jefe de planta informado.',muestra:'Muestra tomada. Resultado de laboratorio en unos 60 min.',autoridad:'Autoridad ambiental notificada (simulado).',libro:'Evento registrado en el libro de planta.'}[k]);
+  updPlan();
+}
+function impStats(){
+  const im=S.imp,sp=S.spill;
+  let risk=0;const why=[],add=(n,t)=>{risk+=n;why.push(t);};
+  if(im.m3over>0) add(im.m3over>=5?3:2,'efluente sin tratar al receptor ('+fmt(im.m3over,1)+' m³)');
+  if(sp&&sp.escaped>0) add(sp.escaped>=3?3:sp.escaped>=1?2:1,'ácido al drenaje ('+fmt(sp.escaped,1)+' m³)');
+  if(im.minOut>=10) add(im.minOut>=60?3:im.minOut>=30?2:1,'vuelco fuera de límite '+im.minOut+' min');
+  if(im.pwrMin>=20) add(1,'planta '+im.pwrMin+' min sin red');
+  const lv=risk>=3?['bad','Riesgo alto']:risk>=1?['wn','Riesgo medio']:['ok','Riesgo bajo'];
+  const rows=[['Fuera de límite',im.minOut+' min',im.minOut>0],['DBO₅ en exceso',fmt(im.kgDBO,1)+' kg',im.kgDBO>.05],['SST en exceso',fmt(im.kgSST,1)+' kg',im.kgSST>.05],['Sin tratar al receptor',fmt(im.m3over,1)+' m³',im.m3over>0],
+    ['Ácido derramado',sp?fmt(sp.total,1)+' m³':'—',!!sp&&sp.total>0],['Ácido al drenaje',sp?fmt(sp.escaped,1)+' m³':'—',!!sp&&sp.escaped>0],['Producción afectada',im.prodMin+' min',false],['Planta sin red',im.pwrMin+' min',im.pwrMin>0]];
+  return {rows,lv,why};
+}
+const impHtml=rows=>rows.map(([a,b,bad])=>`<div class="${bad?'bad':''}"><small>${a}</small><span>${b}</span></div>`).join('');
+function renderImp(){
+  const {rows,lv,why}=impStats(),rc=$('#riskChip'); if(!rc)return;
+  rc.className='chip '+lv[0]; rc.textContent=lv[1];
+  $('#impGrid').innerHTML=impHtml(rows)+(why.length?'<div style="grid-column:1/-1;background:none;padding:2px 0 0;font-size:12.5px;color:var(--muted)">Riesgo por: '+why.join('; ')+'.</div>':'');
+}
+function impactHtml(){
+  const {rows,lv,why}=impStats();
+  return `<div class="imp">${impHtml(rows)}</div><p style="margin:8px 0 0"><span class="chip ${lv[0]}">${lv[1]}</span> <span style="color:var(--muted);font-size:12.5px">${why.length?'Por: '+why.join('; ')+'. ':''}Indicador del simulacro, no una determinación legal.</span></p>`;
+}
+function buildActa(sc,r){
+  const L=[];
+  L.push('REGISTRO DE SIMULACRO DE EMERGENCIA AMBIENTAL (ref. ISO 14001, cl. 8.2)');
+  L.push('Instalación: PTE planta de bebidas (simulador) · PLC-01');
+  L.push('Fecha de realización: '+new Date().toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires'}));
+  L.push('Escenario: '+sc.def.name+r.vname);
+  L.push('Resultado: '+r.total+'/100 · '+r.grade);
+  L.push(r.respTxt);
+  L.push('Cumplimiento: '+Math.round(r.okFrac*100)+' % del tiempo del escenario');
+  L.push(''); L.push('Impacto del evento:');
+  impStats().rows.forEach(x=>L.push(' - '+x[0]+': '+x[1]));
+  L.push(''); L.push('Acciones registradas:');
+  if(sc.log.length) sc.log.forEach(a=>L.push(' - '+hhmm(a.t)+' (t+'+Math.round(a.rt)+' min) '+EQ[a.eq].tag+' '+actTxt(a)));
+  else L.push(' - Sin maniobras.');
+  if(sc.wrong.size){L.push(''); L.push('Observaciones:'); sc.wrong.forEach(w=>L.push(' - '+w));}
+  L.push(''); L.push('Participante: ______________________   Responsable del simulacro: ______________________');
+  L.push('Simulacro de entrenamiento sobre un modelo simplificado de la planta.');
+  return L.join('\n');
+}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fdate=t=>new Date(t).toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+async function saveRun(rec){
+  const say=t=>{const e=$('#saveSt');if(e)e.textContent=t;};
+  try{
+    const use=window.claude&&window.claude.use;
+    const db=use&&await use('db'),user=use&&await use('user'),id=user&&await user.id();
+    if(!db||!id){say('Este simulacro no se guardó: esta versión publicada no tiene registro compartido. Copiá el acta de abajo para conservarlo.');return;}
+    const ref=db.doc('simulacros/'+id),cur=await ref.get();
+    const runs=cur.exists?[...(cur.data().runs||[])]:[];
+    runs.push(rec);
+    await ref.set({runs:runs.slice(-100)});
+    say('Guardado en el registro compartido.');
+  }catch(e){say('No se pudo guardar el simulacro ('+((e&&e.code)||'error')+'). Puede faltar permiso de Contribuidor.');}
+}
+let REG=[];
+async function loadReg(){
+  const sum=$('#regSum'); sum.textContent='Cargando…';
+  try{
+    const use=window.claude&&window.claude.use,db=use&&await use('db');
+    if(!db){REG=[];renderReg();sum.textContent='El registro compartido no está disponible en esta versión publicada.';return;}
+    const snap=await Promise.race([db.collection('simulacros').get(),new Promise((_,no)=>setTimeout(()=>no({code:'timeout'}),10000))]);
+    REG=snap.docs.flatMap(d=>(d.data().runs||[]).map(r=>({...r,uid:d.id})));
+    renderReg();
+  }catch(e){sum.textContent='No se pudo leer el registro ('+((e&&e.code)||'error')+').';}
+}
+function renderReg(){
+  const sel=$('#regSel'),cur=sel.value,names=[...new Set(REG.map(r=>r.op))].sort();
+  sel.innerHTML='<option value="">Todos</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  sel.value=names.includes(cur)?cur:'';
+  const rows=REG.filter(r=>!sel.value||r.op===sel.value).sort((a,b)=>b.t-a.t);
+  const avg=rows.length?Math.round(rows.reduce((s,r)=>s+r.score,0)/rows.length):0,ok=rows.filter(r=>r.score>=85).length;
+  if(REG.length||!$('#regSum').textContent.startsWith('El registro')) $('#regSum').textContent=rows.length?rows.length+(rows.length===1?' simulacro':' simulacros')+' · promedio '+avg+'/100 · '+Math.round(100*ok/rows.length)+' % competentes':'Todavía no hay simulacros registrados.';
+  $('#regBody').innerHTML=rows.slice(0,200).map(r=>`<tr><td class="n" style="text-align:left">${esc(fdate(r.t))}</td><td>${esc(r.op)}</td><td>${esc(r.sc)}${r.blind?' <span class="chip wn">Sorpresa</span>':''}</td><td class="n">${esc(r.score)}</td><td>${esc(r.grade)}</td><td>${esc(r.risk)}</td></tr>`).join('');
+  const q=v=>{v=String(v==null?'':v).replace(/[;\r\n]+/g,' ');return /^[=+\-@]/.test(v)?"'"+v:v;};
+  $('#csvTx').value=['Fecha;Operador;Escenario;Puntaje;Calificación;Respuesta (min);Riesgo;Min fuera de límite;Sorpresa']
+    .concat(rows.map(r=>[fdate(r.t),r.op,r.sc,r.score,r.grade,r.resp,r.risk,r.minOut,r.blind?'Sí':'No'].map(q).join(';'))).join('\n');
+}
+function copyTx(sel){
+  const t=$(sel),done=()=>toast('Copiado.');
+  const fb=()=>{t.closest('details').open=true;t.focus();t.select();toast('Seleccioná el texto y copialo con Ctrl+C.');};
+  try{navigator.clipboard.writeText(t.value).then(done,fb);}catch(e){fb();}
+}
+function copyActa(){
+  const t=$('#actaTx'),done=()=>toast('Acta copiada.');
+  const fb=()=>{t.closest('details').open=true;t.focus();t.select();toast('Seleccioná el texto y copialo con Ctrl+C.');};
+  try{navigator.clipboard.writeText(t.value).then(done,fb);}catch(e){fb();}
+}
+
+function startScenario(id,opt){
+  SC=null;
+  resetPlant();
+  const def=SCEN[id];
+  SC={id,def,t0:S.t,log:[],hist:[],wrong:new Set(),hints:0,popped:false,popAt:null,firstKey:null};
+  SC.blind=!!(opt&&opt.blind);
+  def.init(SC);
+  S.alarms={};
+  $('#scenBar').hidden=false; $('#scName').textContent=SC.blind?'Simulacro sorpresa':def.name; $('#btnHint').hidden=SC.blind;
+  closeM('mScen'); S.running=true; updPause();
+  toast('Turno iniciado. Planta en régimen normal: supervisá el proceso.');
+  buildFP();
+}
+function showAlarmPopup(a){
+  SC.popped=true; SC.popAt=S.t; SC.popWasRunning=S.running; S.running=false; updPause();
+  $('#mAlarmTag').textContent=a.tag+' · '+hhmm(S.t);
+  $('#mAlarmMsg').textContent=a.txt;
+  $('#mAlarmField').textContent=SC.def.field(SC);
+  openM('mAlarm');
+}
+function endScenario(){
+  if(!SC) return;
+  const sc=SC; SC=null; $('#scenBar').hidden=true;
+  if(!sc.hist.length){return;}
+  const okf=sc.def.okFn||(h=>h.ok);const okFrac=sc.hist.filter(okf).length/sc.hist.length;
+  const comp=40*okFrac;
+  let resp=0,respTxt='No se registró una acción correctiva clave.';
+  if(sc.popAt!=null&&sc.firstKey!=null){const d=sc.firstKey-sc.popAt;resp=d<=5?20:d>=30?0:20*(30-d)/25;respTxt='Primera acción correctiva a los '+Math.max(0,Math.round(d))+' min de la alarma.';}
+  else if(sc.popAt==null){respTxt='La alarma no llegó a dispararse.';resp=sc.firstKey!=null?20:0;}
+  const checks=sc.def.checks(sc);
+  const act=checks.reduce((s,c)=>s+c.s,0);
+  const Hmin=Math.min(...sc.hist.map(h=>h.H));
+  const over=sc.hist.some(h=>h.over);
+  const stopped=sc.hist.filter(h=>h.Q<=0).length;
+  let stab=6*Math.min(1,Hmin/.9)+(over?0:4);
+  const pen=Math.min(12,sc.wrong.size*3)+sc.hints*5+((stopped>15&&!sc.def.noStop)?5:0);
+  const total=clamp(Math.round(comp+resp+act+stab-pen),0,100);
+  const grade=total>=85?'Competente':total>=65?'Aceptable con observaciones':'Requiere reentrenamiento';
+  const gcol=total>=85?'var(--run)':total>=65?'var(--warn)':'var(--fault)';
+  const C=2*Math.PI*50;
+  const bar=(l,v,m)=>`<div><span>${l}</span><span class="tr"><i style="width:${Math.max(0,v/m*100)}%"></i></span><span class="n">${Math.round(v)}/${m}</span></div>`;
+  const li=c=>{const cls=c.s>=c.w?'y':c.s>0?'p':'n';const m=cls==='y'?'✓':cls==='p'?'~':'✗';return `<li class="${cls}"><span class="m">${m}</span><span>${c.t}<small>${c.d}</small></span><span class="pts">${c.s}/${c.w}</span></li>`;};
+  const vname=sc.id==='ph'?' ('+(sc.v==='alto'?'alcalino':'ácido')+')':'';
+  const extra=[];
+  if(over) extra.push({t:'Hubo rebalse de la ecualización',d:'Se volcó efluente sin tratar. Al bajar el caudal de B-01 hay que vigilar el nivel de TK-101.'});
+  if(Hmin<.85) extra.push({t:'La biomasa se dañó',d:'Actividad mínima: '+Math.round(Hmin*100)+' %. Tarda horas o días en recuperarse.'});
+  if(stopped>15&&!sc.def.noStop) extra.push({t:'El tratamiento estuvo detenido '+stopped+' min',d:'Detener la planta no resuelve el problema y acumula efluente.'});
+  if(sc.def.extra) sc.def.extra(sc).forEach(x=>extra.push(x));
+  sc.wrong.forEach(w=>extra.push({t:w,d:'Penalización −3 pts.'}));
+  if(sc.hints) extra.push({t:'Pistas usadas: '+sc.hints,d:'Penalización −'+sc.hints*5+' pts.'});
+  const logHtml=sc.log.length?sc.log.map(a=>`<div>${hhmm(a.t)} · t+${String(Math.round(a.rt)).padStart(3,'0')} · ${EQ[a.eq].tag} ${actTxt(a)}</div>`).join(''):'<div>Sin maniobras.</div>';
+  $('#endBody').innerHTML=`
+    <h3 id="mEndT">Evaluación: ${sc.def.name}${vname}</h3>
+    <div class="score">
+      <svg class="ring-score" viewBox="0 0 120 120" aria-label="Puntaje ${total} de 100"><circle cx="60" cy="60" r="50" fill="none" stroke="var(--panel2)" stroke-width="12"/><circle cx="60" cy="60" r="50" fill="none" stroke="${gcol}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${C*total/100} ${C}" transform="rotate(-90 60 60)"/><text x="60" y="66" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="30" font-weight="600" fill="var(--ink)">${total}</text><text x="60" y="84" text-anchor="middle" font-size="11" fill="var(--muted)">de 100</text></svg>
+      <div style="flex:1;min-width:220px"><div class="grade" style="color:${gcol}">${grade}</div><p style="color:var(--muted);margin:2px 0 8px">${respTxt}</p>
+        <div class="bars">${bar('Cumplimiento de vuelco',comp,40)}${bar('Tiempo de respuesta',resp,20)}${bar('Acciones correctas',act,30)}${bar('Estabilidad del proceso',stab,10)}${pen?`<div><span>Penalizaciones</span><span></span><span class="n" style="color:var(--fault)">−${pen}</span></div>`:''}</div></div>
+    </div>
+    <p style="font-size:13.5px">${sc.def.okLbl||'El vuelco cumplió los límites'} el <b>${Math.round(okFrac*100)} %</b> del tiempo del escenario.</p>
+    <p class="src" id="saveSt">Guardando en el registro…</p><h4>Impacto del evento</h4>${impactHtml()}<h4>Cómo procediste</h4><ul class="chk">${checks.map(li).join('')}</ul>
+    ${extra.length?`<h4>Observaciones</h4><ul class="chk">${extra.map(x=>`<li class="n"><span class="m">!</span><span>${x.t}<small>${x.d}</small></span><span></span></li>`).join('')}</ul>`:''}
+    <h4>Procedimiento recomendado</h4><ol>${sc.def.proc(sc).map(x=>`<li>${x}</li>`).join('')}</ol>
+    <h4>Registro de maniobras</h4><div class="log">${logHtml}</div>
+    <details><summary>Acta del simulacro (texto para copiar)</summary><textarea class="acta" id="actaTx" readonly></textarea><div class="dlg-act"><button class="btn" id="btnCopy">Copiar acta</button></div></details>
+    <div class="dlg-act"><button class="btn" id="btnFree">Seguir en modo libre</button><button class="btn primary" id="btnRetry">Repetir escenario</button><button class="btn" id="btnOther">Otro escenario</button></div>`;
+  openM('mEnd');
+  $('#actaTx').value=buildActa(sc,{total,grade,respTxt,okFrac,vname});
+  $('#btnCopy').onclick=copyActa;
+  saveRun({t:Date.now(),op:OP||'Sin nombre',sc:sc.def.name+vname,em:!!sc.def.em,score:total,grade,resp:(sc.popAt!=null&&sc.firstKey!=null)?Math.round(sc.firstKey-sc.popAt):null,risk:impStats().lv[1],minOut:S.imp.minOut,blind:!!sc.blind});
+  $('#btnFree').onclick=()=>closeM('mEnd');
+  $('#btnRetry').onclick=()=>{closeM('mEnd');startScenario(sc.id);};
+  $('#btnOther').onclick=()=>{closeM('mEnd');openM('mScen');};
+}
+function actTxt(a){
+  if(a.eq==='PLAN') return '→ '+((PLAN.find(x=>x.k===a.act)||{}).l||({prodoff:'Producción reanudada'}[a.act])||a.act);
+  const u=EQ[a.eq].unit||'';
+  return {on:'→ marcha',off:'→ parada',sp:'→ consigna '+a.v+' '+u,reset:'→ reset',reserva:'→ conmutada a reserva',principal:'→ vuelta a principal',refill:'→ tanque repuesto',open:'→ abierta',close:'→ cerrada'}[a.act]||a.act;
+}
+
+/* ---------- Planta ---------- */
+function resetPlant(){
+  S.eq=JSON.parse(JSON.stringify(NORMAL_EQ)); S.p={...NORMAL_P}; S.alarms={}; S.plan={}; S.prodStop=false; S.prodAt=null; S.pw={grid:true,gen:false,genAt:0}; S.spill=null;
+  for(let i=0;i<600;i++) step(.5);
+  S.imp=newImp();
+  S.t=8*60; S.hist=[]; S.lastMin=Math.floor(S.t);
+}
+
+function record(){
+  const p=S.p,e=S.eq,c=limitsCheck(p);
+  const h={t:S.t,pHn:p.pHn,pHv:p.pHv,OD:p.OD,SSTo:p.SSTo,DQOo:p.DQOo,DBOo:p.DBOo,Po:p.Po,Clo:p.Clo,L:p.L,SVI:p.SVI,blanket:p.blanket,SSTd:p.SSTd,H:p.H,Q:p.Qout,over:p.Qover>0,ok:allOk(c),
+    sp:{D1:e.D1.on?e.D1.sp:0,D2:e.D2.on?e.D2.sp:0,D3:e.D3.on?e.D3.sp:0,D5:e.D5.on?e.D5.sp:0,D4:e.D4.on?e.D4.sp:0,B01:e.B01.on?e.B01.sp:0,B04:e.B04.on?e.B04.sp:0,B02:e.B02.on,XV301:e.XV301.on}};
+  const im=S.imp; if(!c.none&&!allOk(c)) im.minOut++;
+  im.kgDBO+=Math.max(0,p.DBOo-LIM.DBO)*p.Qv/60000; im.kgSST+=Math.max(0,p.SSTo-LIM.SST)*p.Qv/60000; im.m3over+=p.Qover/60;
+  if(S.prodStop) im.prodMin++; if(!S.pw.grid) im.pwrMin++;
+  const sp=S.spill; if(sp){if(sp.src) sp.total+=.4; if(spEsc(sp)) sp.escaped+=.4;}
+  S.hist.push(h); if(S.hist.length>300) S.hist.shift();
+  if(SC){h.rt=S.t-SC.t0; SC.hist.push(h);}
+}
+
+/* ---------- Sinóptico SVG ---------- */
+const TK={};
+function tank(id,x,y,w,h,label,sub,opt={}){
+  TK[id]={x,y,w,h};
+  return `<rect class="tank" x="${x}" y="${y}" width="${w}" height="${h}" rx="${opt.rx||4}"/>
+  <rect class="${opt.cls||'liq'}" id="liq-${id}" x="${x+3}" y="${y+h-3}" width="${w-6}" height="0"/>
+  <text class="lbl" x="${x+w/2}" y="${y+h+(opt.ly||15)}" text-anchor="middle">${label}</text>${sub?`<text class="sub" x="${x+w/2}" y="${y+h+27}" text-anchor="middle">${sub}</text>`:''}`;
+}
+function pump(id,cx,cy,label,r=13,lx,ly){
+  return `<g class="eqg" data-eq="${id}" id="g-${id}" tabindex="0" role="button" aria-label="${EQ[id].name}">
+   <circle class="ring" cx="${cx}" cy="${cy}" r="${r+6}"/>
+   <circle class="pm" cx="${cx}" cy="${cy}" r="${r}"/>
+   <path class="pm-ico" d="M${cx-r*.45},${cy-r*.55} L${cx+r*.6},${cy} L${cx-r*.45},${cy+r*.55} Z"/>
+   <text class="tiny" x="${lx??cx}" y="${ly??cy+r+12}" text-anchor="middle">${label}</text>
+   <text class="spt" id="sp-${id}" x="${(lx??cx)}" y="${(ly??cy+r+12)+11}" text-anchor="middle"></text></g>`;
+}
+function blower(id,cx,cy,label){
+  return `<g class="eqg" data-eq="${id}" id="g-${id}" tabindex="0" role="button" aria-label="${EQ[id].name}">
+   <circle class="ring" cx="${cx}" cy="${cy}" r="24"/>
+   <circle class="pm" cx="${cx}" cy="${cy}" r="18"/>
+   <g class="fan"><path class="blade" d="M${cx},${cy-11} L${cx},${cy+11} M${cx-11},${cy} L${cx+11},${cy}" style="stroke:var(--panel)"/></g>
+   <text class="tiny" x="${cx}" y="${cy+32}" text-anchor="middle">${label}</text>
+   <text class="spt" id="sp-${id}" x="${cx}" y="${cy+43}" text-anchor="middle"></text></g>`;
+}
+function vbox(id,x,y,label,w=100){
+  return `<g class="vbox" id="vb-${id}"><rect x="${x}" y="${y}" width="${w}" height="19" rx="2"/><text class="vl" x="${x+5}" y="${y+13}">${label}</text><text class="vv" id="v-${id}" x="${x+w-5}" y="${y+13.5}" text-anchor="end">—</text></g>`;
+}
+function chemTank(x,y,w,h,txt){return `<rect class="tank" x="${x}" y="${y}" width="${w}" height="${h}" rx="3" style="fill:var(--panel2)"/><rect x="${x+3}" y="${y+10}" width="${w-6}" height="${h-13}" style="fill:var(--chem);opacity:.28"/><text class="tiny" x="${x+w/2}" y="${y+h/2+6}" text-anchor="middle" style="fill:var(--ink);font-weight:600">${txt}</text>`;}
+const PIPES=[
+  ['in','M8,130 H62',''],['tz','M118,130 H160',''],
+  ['eqb1','M310,206 H325',''],['b1n','M351,206 H368 V110 H392',''],
+  ['nf','M488,206 H530',''],['fd','M622,196 H652',''],
+  ['d104','M880,180 H900',''],['104b3','M970,206 H987',''],['b3r1','M1013,206 H1040 V262 H40 V330 H70',''],
+  ['r1r2','M290,330 H320',''],['r2sd','M540,320 H600',''],['sdcl','M800,304 H840',''],['clout','M970,320 H1060',''],['out','M1100,320 H1120',''],
+  ['ras','M690,428 V449 M687,462 H55 V352 H70','sl'],
+  ['was','M712,428 V500 H767 M793,500 H860','sl'],
+  ['float','M860,110 V54 H880','sl'],['fesp','M940,54 H1190 V482 H920 V500','sl'],
+  ['b6','M960,560 H977 M1003,560 H1020','sl'],['cf','M1116,560 H1132','sl'],
+  ['daf','M800,200 V237 H738 M720,237 H693 M667,237 H640 V160 H652',''],
+  ['air1','M200,542 V448','air'],['air2','M300,542 V448','air'],['airh','M100,448 H520 M120,448 V418 M190,448 V418 M260,448 V418 M370,448 V418 M440,448 V418 M510,448 V418','air'],
+  ['cD1','M402,52 V96','chem'],['cD2','M478,52 V96','chem'],['cD3','M544,52 V112','chem'],['cD4','M600,52 V112','chem'],
+  ['cD5','M64,492 H82 M98,492 H110 V420','chem'],['cD6','M904,418 H921 M939,418 H955 V372','chem'],['cXV','M600,500 V470','chem']
+];
+function buildSVG(){
+  let s='';
+  s+=PIPES.map(([id,d,c])=>`<path class="pipe ${c}" d="${d}"/>`).join('');
+  s+=PIPES.map(([id,d,c])=>`<path class="flow ${c}" id="f-${id}" d="${d}"/>`).join('');
+  // ingreso
+  s+=`<text class="lbl" x="8" y="86">EFLUENTE CRUDO</text><text class="sub" x="8" y="99">Planta de gaseosas</text>`;
+  s+=`<rect class="tank" x="62" y="108" width="56" height="44" rx="4"/><circle cx="90" cy="130" r="15" style="fill:var(--steel2);stroke:var(--ink);stroke-width:1"/><g class="spin" id="tzspin"><path class="blade" d="M90,118 V142 M78,130 H102"/></g><text class="lbl" x="90" y="168" text-anchor="middle">TR-100</text><text class="sub" x="90" y="180" text-anchor="middle">Tamiz rotativo</text>`;
+  s+=vbox('Qin',8,192,'Q ing. m³/h',112)+vbox('pHin',8,214,'pH ingreso',112)+vbox('Pin',8,236,'PO₄-P mg/l',112)+vbox('DQOin',8,258,'DQO mg/l',112);
+  // ecualización
+  s+=tank('eq',160,72,150,148,'TK-101 Ecualización','400 m³');
+  s+=`<line x1="235" y1="60" x2="235" y2="180" style="stroke:var(--ink);stroke-width:2"/><g class="spin" id="ageq"><path class="blade" d="M219,180 H251"/></g><rect x="222" y="54" width="26" height="10" style="fill:var(--steel2)"/>`;
+  s+=vbox('L',165,20,'LIT-101 nivel %',140)+vbox('pHeq',165,42,'AIT-101 pH',140);
+  s+=`<text class="over" id="overTxt" x="235" y="130" text-anchor="middle" visibility="hidden">REBALSE</text>`;
+  s+=pump('B01',338,206,'B-01',13,338,233);
+  // neutralización
+  s+=chemTank(380,14,44,38,'H₂SO₄')+chemTank(456,14,44,38,'NaOH');
+  s+=tank('n',392,96,96,124,'TK-102','Neutralización');
+  s+=pump('D1',402,72,'',8,416,76).replace('text-anchor="middle"></text></g>','text-anchor="start"></text></g>');
+  s+=pump('D2',478,72,'',8,492,76).replace('text-anchor="middle"></text></g>','text-anchor="start"></text></g>');
+  s+=`<line x1="440" y1="86" x2="440" y2="175" style="stroke:var(--ink);stroke-width:2"/><g class="spin" id="agn"><path class="blade" d="M428,175 H452"/></g>`;
+  s+=vbox('pHn',397,184,'pH',86);
+  // coag-floc
+  s+=chemTank(522,14,44,38,'PAC')+chemTank(578,14,44,38,'POLÍM.');
+  s+=tank('cf',530,112,92,108,'TK-103','Coag.-floculación');
+  s+=pump('D3',544,72,'',8,556,92).replace('text-anchor="middle"></text></g>','text-anchor="start"></text></g>');
+  s+=pump('D4',600,72,'',8,612,92).replace('text-anchor="middle"></text></g>','text-anchor="start"></text></g>');
+  s+=`<g class="badge" id="d3res" visibility="hidden"><rect x="490" y="62" width="30" height="13" rx="2"/><text x="505" y="72" text-anchor="middle">RES</text></g>`;
+  s+=`<line x1="576" y1="120" x2="576" y2="185" style="stroke:var(--ink);stroke-width:2"/><g class="spin" id="agf"><path class="blade" d="M564,185 H588"/></g>`;
+  // DAF
+  s+=`<path class="tank" d="M652,108 H880 V170 L842,200 H690 L652,170 Z"/><path class="liq" id="dafliq" d="M655,122 H877 V168 L840,197 H692 L655,168 Z"/><rect class="sludgef" id="daffloat" x="655" y="112" width="222" height="10"/>`;
+  s+=`<line x1="660" y1="104" x2="872" y2="104" style="stroke:var(--ink);stroke-width:1.5;stroke-dasharray:6 6" id="scraper"/>`;
+  s+=`<text class="lbl" x="766" y="216" text-anchor="middle">FL-101 Flotador DAF</text>`;
+  s+=vbox('SSTd',700,140,'AIT-103 SST mg/l',132);
+  s+=pump('B02',680,237,'B-02',11,664,256);
+  s+=`<rect class="tank" x="720" y="222" width="18" height="32" rx="8"/><text class="tiny" x="729" y="264" text-anchor="middle">Saturador</text>`;
+  s+=tank('fl',880,30,60,46,'','',{cls:'sludgef'})+`<text class="tiny" x="910" y="22" text-anchor="middle">TK-105 Flotado</text>`;
+  // clarificado
+  s+=tank('c104',900,130,70,90,'TK-104','Clarificado');
+  s+=pump('B03',1000,206,'B-03',13,1000,233).replace(/y="\d+(\.\d+)?" text-anchor="middle"><\/text><\/g>$/,'y="244" text-anchor="middle"></text></g>');
+  // reactores
+  s+=`<g id="r1g">`+tank('r1',70,292,220,128,'R-201 Reactor aeróbico 1','',{ly:52})+bubbles(80,280)+`</g>`;
+  s+=`<g id="r2g">`+tank('r2',320,292,220,128,'R-202 Reactor aeróbico 2','',{ly:52})+bubbles(330,530)+`</g>`;
+  s+=vbox('OD1',80,300,'OD mg/l',96)+vbox('M',182,300,'SSLM g/l',100)+vbox('OD2',330,300,'OD mg/l',96)+vbox('effB',432,300,'Activ. %',100);
+  // nutrientes
+  s+=chemTank(14,470,50,44,'N-P');
+  s+=`<rect x="14" y="470" width="50" height="5" style="fill:var(--panel2)"/><rect id="d5lvl" x="14" y="516" width="50" height="5" style="fill:var(--chem)"/>`;
+  s+=pump('D5',90,492,'',8,90,515);
+  s+=`<text class="tiny" x="39" y="532" text-anchor="middle">Nutrientes</text>`;
+  s+=blower('S1',200,560,'S-01')+blower('S2',300,560,'S-02');
+  // sedimentador
+  s+=`<path class="tank" d="M600,292 H800 V380 L715,428 H685 L600,380 Z"/><path class="liq" d="M603,295 H797 V378 L714,425 H686 L603,378 Z"/><path class="sludgef" id="blanket" d="M603,378 L686,425 H714 L797,378 Z"/>`;
+  s+=`<text class="lbl" x="760" y="446" text-anchor="middle">SD-301 Sedimentador</text>`;
+  s+=vbox('SVI',606,300,'IVL ml/g',92)+vbox('bl',702,300,'Manto m',94)+vbox('SSTsd',650,324,'SST sal. mg/l',104);
+  s+=pump('B04',690,462,'B-04',12,706,488).replace('text-anchor="middle">B-04','text-anchor="start">B-04');
+  s+=pump('B05',780,500,'B-05',12,780,525);
+  // XV-301
+  s+=`<g class="eqg" data-eq="XV301" id="g-XV301" tabindex="0" role="button" aria-label="Cloración del RAS"><circle class="ring" cx="600" cy="462" r="16"/><path class="pm" d="M588,454 L612,470 V454 L588,470 Z"/><text class="tiny" x="600" y="440" text-anchor="middle">XV-301</text><text class="spt" id="sp-XV301" x="625" y="490" text-anchor="middle"></text></g><text class="tiny" x="600" y="512" text-anchor="middle">Cl₂ al RAS</text>`;
+  // contacto cloro
+  s+=tank('cl',840,292,130,80,'TK-401 Contacto Cl','');
+  s+=`<path d="M872,295 V350 M904,315 V369 M936,295 V350" style="stroke:var(--steel2);stroke-width:3"/>`;
+  s+=vbox('Clo',846,345,'Cl libre',118);
+  s+=chemTank(860,400,44,36,'NaClO');
+  s+=pump('D6',930,418,'',8,944,438);
+  // vuelco
+  s+=`<rect class="tank" x="1060" y="300" width="40" height="40" rx="3"/><text class="tiny" x="1080" y="296" text-anchor="middle">CM-01</text>`;
+  s+=`<rect class="liq" x="1120" y="300" width="58" height="62" rx="3"/><path d="M1124,318 q7,-5 14,0 t14,0 t14,0 t14,0 M1124,334 q7,-5 14,0 t14,0 t14,0 t14,0" style="fill:none;stroke:var(--panel);stroke-width:1.5"/><text class="lbl" x="1149" y="378" text-anchor="middle">Cuerpo</text><text class="lbl" x="1149" y="391" text-anchor="middle">receptor</text>`;
+  s+=vbox('Qv',990,404,'Q vuelco',106)+vbox('pHv',990,426,'pH vuelco',106)+vbox('Tv',990,448,'T °C',106);
+  // espesador y centrífuga
+  s+=tank('esp',860,500,100,86,'TK-501 Espesador','',{cls:'sludgef'});
+  s+=vbox('Lesp',866,508,'Nivel %',88);
+  s+=pump('B06',990,560,'B-06',12,990,585);
+  s+=`<rect class="tank" x="1020" y="546" width="96" height="28" rx="14"/><text class="tiny" x="1068" y="564" text-anchor="middle" style="fill:var(--ink)">CF-501</text><g class="spin" id="cfspin"><path class="blade" d="M1030,560 H1040"/></g><text class="lbl" x="1068" y="592" text-anchor="middle">Centrífuga</text>`;
+  s+=`<path d="M1132,552 H1186 L1180,584 H1138 Z" style="fill:var(--sludge);stroke:var(--ink);stroke-width:1"/><text class="tiny" x="1159" y="598" text-anchor="middle">Lodo desh.</text>`;
+  s+=`<text class="over" id="spillTxt" x="402" y="11" text-anchor="middle" visibility="hidden">DERRAME</text><text class="over" id="pwrTxt" x="755" y="66" text-anchor="middle" visibility="hidden"></text>`;
+  $('#syn').innerHTML=s;
+  $('#syn').querySelectorAll('.eqg').forEach(g=>{
+    g.addEventListener('click',()=>selectEq(g.dataset.eq));
+    g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();selectEq(g.dataset.eq);}});
+  });
+}
+function bubbles(x0,x1){let s='';for(let i=0;i<14;i++){const x=x0+12+((x1-x0-24)*i/13);const d=(i*0.37)%2.4;s+=`<circle class="bub" cx="${x}" cy="${414-(i%3)*3}" r="${1.6+(i%3)*.6}" style="animation-delay:-${d.toFixed(2)}s"/>`;}return s;}
+
+function setLvl(id,pct){const t=TK[id],el=document.getElementById('liq-'+id);if(!el)return;const h=(t.h-6)*clamp(pct,0,100)/100;el.setAttribute('y',t.y+t.h-3-h);el.setAttribute('height',h);}
+function setV(id,txt,state){const el=document.getElementById('v-'+id);if(el)el.textContent=txt;const g=document.getElementById('vb-'+id);if(g){g.classList.toggle('alm',state==='a');g.classList.toggle('wrn',state==='w');}}
+function flow(id,on){const el=document.getElementById('f-'+id);if(el)el.classList.toggle('on',!!on);}
+function eqState(id){const e=S.eq[id];if(id==='D3'&&e.fault&&!e.reserve)return 'fault';return e.on?'run':'stop';}
+
+function renderSVG(){
+  const p=S.p,e=S.eq,c=limitsCheck(p);
+  const flowing=p.Qout>0;
+  setLvl('eq',p.L); setLvl('n',90); setLvl('cf',88); setLvl('c104',flowing?75:60); setLvl('r1',88); setLvl('r2',88); setLvl('cl',85); setLvl('fl',55); setLvl('esp',p.Lesp);
+  setV('Qin',fmt(p.Qin,1)); setV('pHin',fmt(p.pHin,2),(p.pHin>11||p.pHin<5)?'w':''); setV('Pin',fmt(p.Pin,1),p.Pin>15?'w':'');
+  setV('L',fmt(p.L,1),p.Qover>0?'a':p.L>85?'w':''); setV('pHeq',fmt(p.pHeq,2));
+  setV('pHn',fmt(p.pHn,2),(p.pHn>9.5||p.pHn<5.5)?'a':(p.pHn>8.5||p.pHn<6.5)?'w':'');
+  setV('SSTd',fmt(p.SSTd,0),p.SSTd>120?'a':p.SSTd>80?'w':'');
+  setV('OD1',fmt(p.OD,2),p.OD<1?'a':p.OD<1.5?'w':''); setV('OD2',fmt(Math.min(7.5,p.OD*1.15+.1),2),p.OD<1?'a':'');
+  setV('M',fmt(p.M,2)); setV('effB',fmt(p.H*100,0),p.H<.7?'a':p.H<.9?'w':'');
+  setV('SVI',fmt(p.SVI,0),p.SVI>200?'a':p.SVI>150?'w':''); setV('bl',fmt(p.blanket,2),p.blanket>1.8?'a':p.blanket>1.4?'w':'');
+  setV('SSTsd',fmt(p.SSTo,0),!c.SST?'a':'');
+  setV('Clo',fmt(p.Clo,2)+' mg/l',!c.Cl?'a':'');
+  setV('Qv',fmt(p.Qv,1),p.Qover>0?'a':''); setV('pHv',fmt(p.pHv,2),!c.pH?'a':''); setV('Tv',fmt(p.To,1),!c.T?'a':'');
+  setV('Lesp',fmt(p.Lesp,0),p.Lesp>85?'w':'');
+  document.getElementById('overTxt').setAttribute('visibility',p.Qover>0?'visible':'hidden');
+  setV('DQOin',fmt(p.DQOin,0),p.DQOin>6000?'a':p.DQOin>4000?'w':'');
+  document.getElementById('spillTxt').setAttribute('visibility',(S.spill&&(S.spill.src||spEsc(S.spill)))?'visible':'hidden');
+  const pt=document.getElementById('pwrTxt');pt.textContent=!S.pw.grid?((S.pw.gen&&S.t>=S.pw.genAt)?'SIN RED · GENERADOR':'SIN ENERGÍA DE RED'):'';pt.setAttribute('visibility',S.pw.grid?'hidden':'visible');
+  document.getElementById('d3res').setAttribute('visibility',e.D3.reserve?'visible':'hidden');
+  const dl=document.getElementById('d5lvl'), lh=40*e.D5.tank/100; dl.setAttribute('y',516-lh); dl.setAttribute('height',lh+5);
+  const bl=document.getElementById('blanket'), by=380-clamp((p.blanket-.3)/3.7,0,1)*82;
+  bl.setAttribute('d',`M603,${by} H797 V378 L714,425 H686 L603,378 Z`);
+  for(const id of ORDER){
+    const g=document.getElementById('g-'+id); if(!g)continue;
+    const st=eqState(id); g.classList.remove('st-run','st-stop','st-fault'); g.classList.add('st-'+st); g.classList.toggle('sel',id===sel);
+    const sp=document.getElementById('sp-'+id);
+    if(sp){const m=EQ[id];sp.textContent=id==='XV301'?(e.XV301.on?'ABIERTA':''):(m.sp&&e[id].on?Math.round(e[id].sp)+(m.unit==='%'?'%':''):'');}
+    if(g.querySelector('.fan')) g.classList.toggle('spin',e[id].on);
+  }
+  ['ageq','agn','agf','tzspin'].forEach(i=>document.getElementById(i).parentNode&&document.getElementById(i).classList.toggle('spin',true));
+  document.getElementById('cfspin').classList.toggle('spin',e.B06.on);
+  const air=(e.S1.on||e.S2.on);
+  document.getElementById('r1g').classList.toggle('aer',air); document.getElementById('r2g').classList.toggle('aer',air);
+  flow('in',true);flow('tz',true);
+  ['eqb1','b1n','nf','fd','d104','104b3','b3r1','r1r2','r2sd','sdcl','clout','out'].forEach(i=>flow(i,flowing));
+  flow('ras',e.B04.on);flow('was',e.B05.on&&e.B05.sp>0);flow('float',e.B02.on&&flowing);flow('fesp',e.B02.on&&flowing);
+  flow('b6',e.B06.on);flow('cf',e.B06.on);flow('daf',e.B02.on);
+  flow('air1',e.S1.on);flow('air2',e.S2.on);flow('airh',air);
+  flow('cD1',e.D1.on&&e.D1.sp>0&&flowing);flow('cD2',e.D2.on&&e.D2.sp>0&&flowing);flow('cD3',p.coagAct>0&&flowing);flow('cD4',e.D4.on&&e.D4.sp>0&&flowing);
+  flow('cD5',p.nutAct>0);flow('cD6',e.D6.on&&e.D6.sp>0&&flowing);flow('cXV',e.XV301.on);
+}
+
+/* ---------- Faceplate ---------- */
+function selectEq(id){sel=id;buildFP();renderSVG();}
+function buildFP(){
+  const m=EQ[sel],e=S.eq[sel];
+  const opts=ORDER.map(k=>`<option value="${k}"${k===sel?' selected':''}>${EQ[k].tag} · ${EQ[k].name}</option>`).join('');
+  let ctl='';
+  if(m.type==='valve'){
+    ctl=`<div class="fp-row"><button class="btn" id="fpOn">Abrir</button><button class="btn" id="fpOff">Cerrar</button></div>`;
+  } else {
+    ctl=`<div class="fp-row"><button class="btn" id="fpOn">Marcha</button><button class="btn" id="fpOff">Parada</button></div>`;
+  }
+  if(m.sp) ctl+=`<div class="sp"><label for="fpSp">Consigna <output id="fpSpV">${e.sp} ${m.unit}</output></label><input type="range" id="fpSp" min="${m.min}" max="${m.max}" step="${m.step}" value="${e.sp}"></div>`;
+  if(sel==='D3') ctl+=`<div class="fp-row"><button class="btn" id="fpReset">Reset térmico</button><button class="btn" id="fpRes">${e.reserve?'Volver a principal':'Conmutar a reserva'}</button></div>`;
+  if(sel==='D5') ctl+=`<div class="fp-row"><button class="btn" id="fpRefill">Reponer tanque (IBC nuevo)</button></div>`;
+  $('#fp').innerHTML=`<div class="fp-head"><h2 style="margin:0">Faceplate</h2><select id="fpSel" aria-label="Elegir equipo">${opts}</select></div>
+   <div class="fp-title"><span class="tg">${m.tag}</span><b>${m.name}</b></div>
+   <p class="fp-desc">${m.desc}</p>
+   <div class="state" id="fpState"><i></i><span></span></div>
+   ${ctl}
+   <div class="fp-pv" id="fpPv"></div>
+   <p class="fp-note" id="fpNote"></p>`;
+  $('#fpSel').onchange=ev=>selectEq(ev.target.value);
+  $('#fpOn').onclick=()=>{if(S.eq[sel].on)return;if(!powered(sel)){toast('Sin energía en el tablero: este equipo no se puede arrancar.');return;}S.eq[sel].on=true;act(sel,m.type==='valve'?'on':'on');updFP();renderSVG();};
+  $('#fpOff').onclick=()=>{if(!S.eq[sel].on)return;S.eq[sel].on=false;act(sel,'off');updFP();renderSVG();};
+  const r=$('#fpSp');
+  if(r){r.oninput=()=>{S.eq[sel].sp=+r.value;$('#fpSpV').textContent=r.value+' '+m.unit;renderSVG();};r.onchange=()=>act(sel,'sp',+r.value);}
+  if(sel==='D3'){
+    $('#fpReset').onclick=()=>{act('D3','reset');if(S.eq.D3.fault&&!S.eq.D3.reserve)toast('Reset sin efecto: el térmico sigue disparado.');else toast('DP-03 sin falla activa.');};
+    $('#fpRes').onclick=()=>{const d=S.eq.D3;if(!d.reserve){d.reserve=true;d.on=true;act('D3','reserva');toast('DP-03 conmutada a la bomba de reserva.');}else{d.reserve=false;act('D3','principal');if(d.fault)toast('La bomba principal sigue en falla.');}buildFP();renderSVG();};
+  }
+  if(sel==='D5') $('#fpRefill').onclick=()=>{S.eq.D5.tank=100;act('D5','refill');toast('Tanque de nutrientes repuesto al 100 %.');updFP();};
+  updFP();
+}
+function updFP(){
+  const m=EQ[sel],e=S.eq[sel],p=S.p,st=eqState(sel);
+  const se=$('#fpState'); if(!se)return;
+  se.className='state '+(st==='run'?'run':st==='fault'?'fault':'');
+  se.querySelector('span').textContent=m.type==='valve'?(e.on?'Abierta':'Cerrada'):st==='run'?'En marcha':st==='fault'?'Falla':'Parada';
+  $('#fpOn').className='btn'+(e.on?' on-act':''); $('#fpOff').className='btn'+(!e.on?' off-act':'');
+  const pv={
+    B01:[['Caudal ingreso',fmt(p.Qin,1)+' m³/h'],['Nivel TK-101',fmt(p.L,1)+' %']],
+    B02:[['SST salida DAF',fmt(p.SSTd,0)+' mg/l'],['Caudal tratado',fmt(p.Qout,1)+' m³/h']],
+    B03:[['Caudal tratado',fmt(p.Qout,1)+' m³/h'],['Nivel TK-101',fmt(p.L,1)+' %']],
+    B04:[['Manto de lodos',fmt(p.blanket,2)+' m'],['IVL',fmt(p.SVI,0)+' ml/g']],
+    B05:[['SSLM',fmt(p.M,2)+' g/l'],['Nivel espesador',fmt(p.Lesp,0)+' %']],
+    B06:[['Nivel espesador',fmt(p.Lesp,0)+' %'],['Estado CF-501',e.on?'Girando':'Detenida']],
+    D1:[['pH neutralización',fmt(p.pHn,2)],['pH ingreso',fmt(p.pHin,2)]],
+    D2:[['pH neutralización',fmt(p.pHn,2)],['pH ingreso',fmt(p.pHin,2)]],
+    D3:[['SST salida DAF',fmt(p.SSTd,0)+' mg/l'],['Dosis efectiva',fmt(p.coagAct,0)+' %']],
+    D4:[['SST salida DAF',fmt(p.SSTd,0)+' mg/l'],['PO₄-P ingreso',fmt(p.Pin,1)+' mg/l']],
+    D5:[['Tanque N-P',fmt(S.eq.D5.tank,0)+' %'],['P total vuelco',fmt(p.Po,2)+' mg/l']],
+    D6:[['Cloro libre',fmt(p.Clo,2)+' mg/l'],['Límite',fmt(LIM.Cl,2)+' mg/l']],
+    S1:[['OD reactor',fmt(p.OD,2)+' mg/l'],['Activ. biológica',fmt(p.H*100,0)+' %']],
+    S2:[['OD reactor',fmt(p.OD,2)+' mg/l'],['Activ. biológica',fmt(p.H*100,0)+' %']],
+    XV301:[['IVL',fmt(p.SVI,0)+' ml/g'],['Activ. biológica',fmt(p.H*100,0)+' %']]
+  }[sel];
+  $('#fpPv').innerHTML=pv.map(([a,b])=>`<div><small>${a}</small><span>${b}</span></div>`).join('');
+  let note='';
+  if(sel==='D3'&&e.fault&&!e.reserve) note='Disparo térmico en la bomba principal.';
+  if(sel==='D5'&&S.eq.D5.tank<=.5) note='Tanque vacío: la bomba gira en seco y no dosifica.';
+  $('#fpNote').textContent=note;
+}
+
+/* ---------- Vuelco ---------- */
+function buildLim(){
+  const L=[['pHmin','pH mínimo'],['pHmax','pH máximo'],['T','Temperatura °C'],['DBO','DBO₅ mg/l'],['DQO','DQO mg/l'],['SST','SST mg/l'],['P','Fósforo total mg/l'],['Cl','Cloro libre mg/l']];
+  $('#limgrid').innerHTML=L.map(([k,l])=>`<label for="lim-${k}">${l}<input id="lim-${k}" type="number" step="0.1" value="${LIM[k]}"></label>`).join('');
+  L.forEach(([k])=>{$('#lim-'+k).onchange=ev=>{const v=parseFloat(ev.target.value);if(Number.isFinite(v))LIM[k]=v;};});
+}
+function renderV(){
+  const p=S.p,c=limitsCheck(p);
+  const rows=[['pH',fmt(p.pHv,2),fmt(LIM.pHmin,1)+'–'+fmt(LIM.pHmax,1),c.pH],['Temperatura',fmt(p.To,1)+' °C','≤ '+fmt(LIM.T,0),c.T],['DBO₅',fmt(p.DBOo,0)+' mg/l','≤ '+fmt(LIM.DBO,0),c.DBO],['DQO',fmt(p.DQOo,0)+' mg/l','≤ '+fmt(LIM.DQO,0),c.DQO],['SST',fmt(p.SSTo,0)+' mg/l','≤ '+fmt(LIM.SST,0),c.SST],['Fósforo total',fmt(p.Po,2)+' mg/l','≤ '+fmt(LIM.P,1),c.P],['Cloro libre',fmt(p.Clo,2)+' mg/l','≤ '+fmt(LIM.Cl,1),c.Cl],['Caudal',fmt(p.Qv,1)+' m³/h','—',true]];
+  $('#vtab').innerHTML=rows.map(r=>`<tr><td>${r[0]}</td><td class="n">${r[1]}</td><td class="n" style="color:var(--muted)">${r[2]}</td><td style="text-align:right"><span class="chip ${r[3]?'ok':'bad'}">${r[3]?'OK':'Excede'}</span></td></tr>`).join('');
+  const ok=allOk(c),vs=$('#vuelcoState');
+  vs.className='chip '+(c.none?'wn':ok?'ok':'bad'); vs.textContent=c.none?'Sin vuelco':ok?'Cumple':'No cumple';
+}
+
+/* ---------- Alarmas UI ---------- */
+function renderA(){
+  const list=Object.entries(S.alarms).map(([id,s])=>({...ALM.find(a=>a.id===id),...s})).sort((a,b)=>(a.ack-b.ack)||(a.pr-b.pr)||(b.t-a.t));
+  $('#aempty').hidden=list.length>0;
+  $('#atab').innerHTML=list.map(a=>`<tr class="${a.ack?'':'u'}"><td class="pr p${a.pr}"><i></i></td><td class="n" style="text-align:left">${hhmm(a.t)}</td><td><span class="num" style="font-size:11.5px">${a.tag}</span><br>${a.txt}</td><td style="text-align:right"><span class="chip ${a.act?(a.ack?'wn':'bad'):'ok'}">${a.act?(a.ack?'Reconocida':'Activa'):'Retornó'}</span></td></tr>`).join('');
+  const act=list.filter(a=>a.act).length, un=list.some(a=>!a.ack);
+  $('#almCount').textContent=act; const b=$('#btnAlm'); b.classList.toggle('active',act>0); b.classList.toggle('unack',un);
+}
+
+/* ---------- Tendencia ---------- */
+const TR=[['pHn','pH neutralización',null],['pHv','pH vuelco',['pHmin','pHmax']],['OD','OD reactor (mg/l)',null],['SSTo','SST vuelco (mg/l)',['SST']],['SSTd','SST salida DAF (mg/l)',null],['DQOo','DQO vuelco (mg/l)',['DQO']],['DBOo','DBO₅ vuelco (mg/l)',['DBO']],['Po','Fósforo total vuelco (mg/l)',['P']],['Clo','Cloro libre (mg/l)',['Cl']],['L','Nivel ecualización (%)',null],['SVI','IVL (ml/g)',null],['blanket','Manto de lodos (m)',null]];
+function buildTrend(){$('#trendSel').innerHTML=TR.map(([k,l])=>`<option value="${k}">${l}</option>`).join('');$('#trendSel').onchange=drawTrend;}
+function drawTrend(){
+  const cv=$('#trend'),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
+  if(!W)return; if(cv.width!==Math.round(W*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  const cs=getComputedStyle(document.documentElement),col=k=>cs.getPropertyValue(k).trim();
+  const key=$('#trendSel').value,def=TR.find(t=>t[0]===key);
+  const data=S.hist.slice(-240); if(data.length<2){return;}
+  const vals=data.map(h=>h[key]); let lo=Math.min(...vals),hi=Math.max(...vals);
+  const lims=(def[2]||[]).map(k=>LIM[k]); lims.forEach(v=>{lo=Math.min(lo,v);hi=Math.max(hi,v);});
+  if(hi-lo<1e-6){hi+=1;lo-=1;} const pad=(hi-lo)*.12; lo-=pad; hi+=pad; if(key!=='pHn'&&key!=='pHv'&&lo<0)lo=0;
+  const L=44,R=12,T=10,B=22,pw=W-L-R,ph=H-T-B;
+  const t0=data[0].t,t1=data[data.length-1].t,xs=t=>L+(t-t0)/Math.max(1,t1-t0)*pw,ys=v=>T+(1-(v-lo)/(hi-lo))*ph;
+  g.font='11px "IBM Plex Mono", monospace'; g.fillStyle=col('--muted'); g.strokeStyle=col('--panel2'); g.lineWidth=1;
+  for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4,y=ys(v);g.beginPath();g.moveTo(L,y);g.lineTo(W-R,y);g.stroke();g.textAlign='right';g.fillText(fmt(v,hi-lo<1?2:hi-lo<5?1:0),L-6,y+4);}
+  g.textAlign='center'; const span=t1-t0; for(let i=0;i<=4;i++){const t=t0+span*i/4;g.fillText(hhmm(t),xs(t),H-6);}
+  g.setLineDash([5,4]); g.strokeStyle=col('--fault'); lims.forEach(v=>{const y=ys(v);g.beginPath();g.moveTo(L,y);g.lineTo(W-R,y);g.stroke();}); g.setLineDash([]);
+  g.beginPath(); data.forEach((h,i)=>{const x=xs(h.t),y=ys(h[key]);i?g.lineTo(x,y):g.moveTo(x,y);});
+  g.lineTo(xs(t1),T+ph); g.lineTo(xs(t0),T+ph); g.closePath(); g.globalAlpha=.12; g.fillStyle=col('--accent'); g.fill(); g.globalAlpha=1;
+  g.beginPath(); data.forEach((h,i)=>{const x=xs(h.t),y=ys(h[key]);i?g.lineTo(x,y):g.moveTo(x,y);}); g.strokeStyle=col('--accent'); g.lineWidth=2; g.stroke();
+  const lx=xs(t1),ly=ys(vals[vals.length-1]); g.beginPath(); g.arc(lx,ly,3.5,0,7); g.fillStyle=col('--accent'); g.fill();
+}
+
+/* ---------- Modales / UI ---------- */
+function openM(id){$('#'+id).hidden=false;const f=$('#'+id).querySelector('button');f&&f.focus();}
+function closeM(id){$('#'+id).hidden=true;}
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeM(b.dataset.close));
+let tT; function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tT);tT=setTimeout(()=>t.hidden=true,3200);}
+function updPause(){$('#btnPause').textContent=S.running?'Pausa':'Reanudar';}
+$('#btnPause').onclick=()=>{S.running=!S.running;updPause();};
+$('#speed').querySelectorAll('button').forEach(b=>b.onclick=()=>{S.speed=+b.dataset.s;$('#speed').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));});
+$('#btnScen').onclick=()=>openM('mScen');
+let OP='';try{OP=localStorage.getItem('pte-op')||'';}catch(e){}
+$('#opName').value=OP;
+$('#opName').oninput=e=>{OP=e.target.value.trim();try{localStorage.setItem('pte-op',OP);}catch(x){}};
+$('#btnReg').onclick=()=>{openM('mReg');loadReg();};
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;const m=[...document.querySelectorAll('.modal')].find(x=>!x.hidden&&x.id!=='mAlarm');if(m)m.hidden=true;});
+$('#regSel').onchange=renderReg;
+$('#btnCsv').onclick=()=>copyTx('#csvTx');
+$('#btnBlind').onclick=()=>{const ids=Object.keys(SCEN).filter(k=>SCEN[k].em);closeM('mReg');startScenario(ids[Math.floor(Math.random()*ids.length)],{blind:true});};
+$('#btnAlm').onclick=()=>document.querySelector('.alarms').scrollIntoView({behavior:'smooth',block:'center'});
+$('#btnAck').onclick=()=>{for(const [id,s] of Object.entries(S.alarms)){s.ack=true;if(!s.act)delete S.alarms[id];}renderA();};
+$('#btnAttend').onclick=()=>{closeM('mAlarm');S.running=true;updPause();};
+$('#btnEnd').onclick=()=>{if(!SC)return;const rt=S.t-SC.t0;if(rt<SC.def.minEnd){toast('El evento sigue en curso. Podés finalizar a partir de t+'+SC.def.minEnd+' min.');return;}endScenario();};
+$('#btnHint').onclick=()=>{if(!SC)return;const hs=SC.def.hints(SC);const i=Math.min(SC.hints,hs.length-1);if(SC.hints<hs.length)SC.hints++;
+  $('#infoBody').innerHTML=`<h3>Pista ${i+1} de ${hs.length}</h3><p>${hs[i]}</p><div class="dlg-act"><button class="btn primary" data-close="mInfo">Entendido</button></div>`;
+  $('#infoBody').querySelector('[data-close]').onclick=()=>closeM('mInfo'); openM('mInfo');};
+const scBtn=([k,d])=>`<button class="sc${d.em?' em':''}" data-sc="${k}"><span class="meta">Dificultad ${d.lvl} · ${d.dur} min simulados</span><b>${d.name}</b><small>${d.blurb}</small></button>`;
+const scAll=Object.entries(SCEN);
+$('#scgrid').innerHTML='<div class="sch">Operación: desvíos de proceso</div>'+scAll.filter(x=>!x[1].em).map(scBtn).join('')+'<div class="sch">Emergencias ambientales</div>'+scAll.filter(x=>x[1].em).map(scBtn).join('')+
+  `<button class="sc" data-sc="free"><span class="meta">Sin evaluación</span><b>Modo libre</b><small>Operá la planta sin fallas programadas. Reinicia al régimen normal.</small></button>`;
+$('#scgrid').querySelectorAll('.sc').forEach(b=>b.onclick=()=>{if(b.dataset.sc==='free'){SC=null;$('#scenBar').hidden=true;resetPlant();closeM('mScen');S.running=true;updPause();buildFP();toast('Modo libre: planta en régimen normal.');}else startScenario(b.dataset.sc);});
+
+/* ---------- Bucle ---------- */
+let last=performance.now(),acc=0;
+function loop(now){
+  const dtR=Math.min(1,(now-last)/1000); last=now;
+  if(S.running){
+    let simMin=dtR*S.speed/60;
+    while(simMin>0){const d=Math.min(.5,simMin);step(d);simMin-=d;
+      if(Math.floor(S.t)>S.lastMin){S.lastMin=Math.floor(S.t);record();}
+      evalAlarms(); if(!S.running)break;}
+    if(SC){const rt=S.t-SC.t0;$('#scTime').textContent='t+'+String(Math.floor(rt)).padStart(2,'0')+' / '+SC.def.dur+' min';if(rt>=SC.def.dur)endScenario();}
+  }
+  acc+=dtR;
+  if(acc>=.25){acc=0;$('#clk').textContent=hhmm(S.t);renderSVG();renderV();renderA();updFP();updPlan();renderImp();drawTrend();}
+  requestAnimationFrame(loop);
+}
+
+buildSVG(); buildLim(); buildTrend(); resetPlant(); buildPlan();
+for(let i=0;i<120;i++){step(.5);if(Math.floor(S.t)>S.lastMin){S.lastMin=Math.floor(S.t);record();}}
+S.imp=newImp(); buildFP(); renderSVG(); renderV(); renderA(); updPlan(); renderImp(); drawTrend(); $('#clk').textContent=hhmm(S.t);
+window.addEventListener('resize',drawTrend);
+requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
